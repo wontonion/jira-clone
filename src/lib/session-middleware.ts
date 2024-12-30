@@ -1,3 +1,4 @@
+import "server-only"
 import { AUTH_COOKIE } from '@/features/auth/constants';
 import { getCookie } from 'hono/cookie';
 import { createMiddleware } from 'hono/factory';
@@ -25,6 +26,7 @@ export const sessionMiddleware = createMiddleware<AdditionalContext>(
             return c.json({ error: 'Unauthorized' }, 401)
         }
         
+        client.setSession(session)
         const account = new Account(client)
         const databases = new Databases(client)
         const storage = new Storage(client)
