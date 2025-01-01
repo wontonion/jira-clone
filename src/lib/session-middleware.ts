@@ -25,6 +25,7 @@ export const sessionMiddleware = createMiddleware<AdditionalContext>(
             return c.json({ error: 'Unauthorized' }, 401)
         }
         
+        // if session is valid, add more context to the request
         client.setSession(session)
         const account = new Account(client)
         const databases = new Databases(client)
