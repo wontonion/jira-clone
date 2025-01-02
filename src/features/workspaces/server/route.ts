@@ -234,12 +234,24 @@ const app = new Hono()
             const workspace = await databases.getDocument<Workspace>(
                 DATABASE_ID,
                 WORKSPACES_ID,
-                workspaceId)
+                workspaceId
+            )
+
 
             if (workspace.inviteCode !== code) {
                 return c.json({ error: "Invalid invite code" }, 400)
             }
 
+            await databases.createDocument(
+                DATABASE_ID,
+                MEMBERS_ID,
+                ID.unique(),
+                {
+                    workspaceId,
+                    userId: user.$id,
+                    role: MemberRole.MEMBER
+                }
+            )
             
 
             return c.json({ data: workspace })
