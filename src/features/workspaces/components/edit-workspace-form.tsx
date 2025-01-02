@@ -19,13 +19,15 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useRef } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { ArrowLeftIcon, ImageIcon } from "lucide-react";
+import { ArrowLeftIcon, CopyIcon, ImageIcon } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Workspace } from "../types";
 import { useConfirm } from "@/hooks/use-confirm";
 import { useDeleteWorkspace } from "../api/use-delete-workspace";
+import { toast } from "sonner";
+import { useResetInviteCode } from "../api/use-reset-invite-code";
 interface EditWorkspaceFormProps {
   onCancel?: () => void;
   initialValues: Workspace;
@@ -44,6 +46,15 @@ export const EditWorkspaceForm = ({
   const [DeleteDialog, confirmDelete] = useConfirm(
     "Delete Workspace",
     "Are you sure you want to delete this workspace?",
+    "destructive"
+  );
+  const {
+    mutate: resetInviteCode,
+    isPending: isResettingInviteCode,
+  } = useResetInviteCode();
+  const [ResetDialog, confirmReset] = useConfirm(
+    "Reset Invite Code",
+    "Are you sure you want to reset the invite code?",
     "destructive"
   );
 
@@ -99,9 +110,38 @@ export const EditWorkspaceForm = ({
     );
   }
 
+  const fullInviteLink = `${window.location.origin}/workspaces/${initialValues.$id}/invite/${initialValues.inviteCode}`
+
+  const handleCopyInviteLink = () => {
+    navigator.clipboard.writeText(fullInviteLink)
+    .then(() => {
+      toast.success("Invite link copied to clipboard")
+    })
+    .catch(() => {
+      toast.error("Failed to copy invite link")
+    })
+  }
+
+  const handleResetInviteCode = async () => {
+    const ok = await confirmReset();
+    if (!ok) return;
+    resetInviteCode(
+      {
+        param: { workspaceId: initialValues.$id },
+      },
+      {
+        onSuccess: () => {
+          toast.success("Invite code reset");
+          router.refresh();
+        },
+      }
+    );
+  }
+
   return (
     <div className="flex flex-col gap-y-4">
       <DeleteDialog />
+      <ResetDialog />
       {/* Edit Workspace */}
       <Card className="w-full h-full border-none shadow-none">
         <CardHeader className="flex flex-row items-center gap-x-4 p-7 space-y-0">
@@ -227,6 +267,44 @@ export const EditWorkspaceForm = ({
         </CardContent>
       </Card>
 
+      {/* Reset Invite Code */}
+      <Card className="w-full h-full border-none shadow-none">
+        <CardContent className="p-7">
+          <div className="flex flex-col">
+            <h3 className="font-bold">Reset Invite Code</h3>
+            <p className="text-sm text-muted-foreground">
+              Reset the invite code for this workspace.
+            </p>
+            <div className="mt-4">
+              <div className="flex items-center gap-x-2">
+                <Input disabled value={fullInviteLink} />
+                <Button
+                  variant="secondary"
+                  onClick = {handleCopyInviteLink}
+                  className="size-12"
+                >
+                  <CopyIcon className="size-5" />
+                </Button>
+              </div>
+
+            </div>
+            <DottedSeparator className="py-7"/>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              className="mt-6 w-fit ml-auto"
+              disabled={isPending || isResettingInviteCode}
+              onClick={handleResetInviteCode}
+            >
+              Reset Invite Link
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+
+
       {/* Delete Workspace */}
       <Card className="w-full h-full border-none shadow-none">
         <CardContent className="p-7">
@@ -235,6 +313,7 @@ export const EditWorkspaceForm = ({
             <p className="text-sm text-muted-foreground">
               Deleting a workspace is irreversible and will remove all of its data.
             </p>
+            <DottedSeparator className="py-7"/>
             <Button
               type="button"
               variant="destructive"
