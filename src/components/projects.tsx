@@ -12,11 +12,9 @@ import { RiAddCircleFill } from "react-icons/ri"
 
 export const Projects = () => {
     const pathname = usePathname()
+    const { open } = useCreateProjectModal()    
     const workspaceId = useWorkspaceId()
     const { data, isPending } = useGetProjects({ workspaceId })
-
-    const projectId = null
-    const { open } = useCreateProjectModal()
 
     return (
         <div className="flex flex-col gap-y-2">
@@ -34,7 +32,7 @@ export const Projects = () => {
             )}
 
             {data?.documents.map((project) => {
-                const href = `/workspaces/${workspaceId}/projects/${projectId}`
+                const href = `/workspaces/${workspaceId}/projects/${project.$id}`
 
                 const isActive = pathname === href
                 return (

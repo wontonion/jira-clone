@@ -49,9 +49,9 @@ export const CreateProjectForm = ({ onCancel }: CreateProjectFormProps) => {
       image: data.image instanceof File ? data.image : ""
     }
     mutate({ form: finalValues }, {
-      onSuccess: ({}) => {
+      onSuccess: ({data}) => {
         form.reset()
-        // router.push(`/projects/${data.$id}`)
+        router.push(`/workspaces/${workspaceId}/projects/${data.$id}`)
       }
     });
   };
