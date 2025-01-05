@@ -85,7 +85,7 @@ const app = new Hono()
       async (c) => {
          const {users} = await createAdminClient()
          const user = c.get("user")
-        const databases = c.get("databases")
+         const databases = c.get("databases")
          const { workspaceId, projectId, status, assigneeId, search, dueDate } = c.req.valid("query")
 
          const member = await getMember({
@@ -109,15 +109,16 @@ const app = new Hono()
             query.push(Query.equal("projectId", projectId))
          }
 
+         if (assigneeId) {
+            console.log("assigneeId", assigneeId)
+            query.push(Query.equal("assigneeId", assigneeId))
+         }
+
          if (status) {
             console.log("status", status)
             query.push(Query.equal("status", status))
          }
 
-         if (assigneeId) {
-            console.log("assigneeId", assigneeId)
-            query.push(Query.equal("assigneeId", assigneeId))
-         }
 
          if (dueDate) {
             console.log("dueDate", dueDate)
@@ -140,7 +141,7 @@ const app = new Hono()
          const projects = await databases.listDocuments<Project>(
             DATABASE_ID,
             PROJECTS_ID,
-            projectIds.length > 0 ? [Query.contains("id", projectIds)] : []
+            projectIds.length > 0 ? [Query.contains("$id", projectIds)] : []
          )
 
          const members = await databases.listDocuments(
@@ -161,7 +162,7 @@ const app = new Hono()
          )
 
          const populatedTasks = tasks.documents.map((task) => {
-            const project = projects.documents.find((project) => project.id === task.projectId)
+            const project = projects.documents.find((project) => project.$id === task.projectId)
             const assignee = assignees.find((assignee) => assignee.$id === task.assigneeId)
             return {
                ...task,
