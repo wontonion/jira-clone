@@ -1,3 +1,5 @@
+"use client"
+
 import { DottedSeparator } from "@/components/dotted-seperator"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -12,7 +14,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 
 export const MembersList = () => {
     const workspaceId = useWorkspaceId()
-    const { data, isLoading } = useGetMembers({ workspaceId })
+    const { data } = useGetMembers({ workspaceId })
 
 
     return (
@@ -66,7 +68,6 @@ export const MembersList = () => {
                         )}
                     </Fragment>
                 ))}
-                <MembersList />
             </CardContent>
         </Card>
     )

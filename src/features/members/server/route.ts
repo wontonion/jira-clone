@@ -24,17 +24,18 @@ const app = new Hono()
                 workspaceId,
                 userId: user.$id
             })
-
+            
             if (!member) {
                 return c.json({error : "Unauthorized"}, 401)
             }
-
+            
             const members = await databases.listDocuments(
                 DATABASE_ID,
                 MEMBERS_ID,
                 [Query.equal("workspaceId", workspaceId)]
             )
 
+            
             const populatedMembers = await Promise.all(
                 members.documents.map(async (member) => {
                     const user = await users.get(member.userId)
@@ -45,7 +46,7 @@ const app = new Hono()
                     }
                 })
             )
-                
+            
             return c.json({
                 data: {
                     ...members,

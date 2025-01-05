@@ -77,14 +77,14 @@ const app = new Hono()
       zValidator("query", z.object({
          workspaceId: z.string(),
          projectId: z.string().nullish(),
-         status: z.nativeEnum(TaskStatus),
+         status: z.nativeEnum(TaskStatus).optional(),
          assigneeId: z.string().nullish(),
          search: z.string().nullish(),
          dueDate: z.string().nullish(),
       })),
       async (c) => {
          const {users} = await createAdminClient()
-         const user = await user.get()
+         const user = c.get("user")
         const databases = c.get("databases")
          const { workspaceId, projectId, status, assigneeId, search, dueDate } = c.req.valid("query")
 

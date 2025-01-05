@@ -1,22 +1,21 @@
 import { client } from "@/lib/rpc"
 import { useQuery } from "@tanstack/react-query"
 
-interface UseGetMembersProps {
+
+interface UseGetTasksProps {
     workspaceId: string
 }
 
-export const useGetMembers = ({
-    workspaceId
-}: UseGetMembersProps) => {
+export const useGetTasks = ({ workspaceId }: UseGetTasksProps) => {
     const query = useQuery({
-        queryKey: ["members", workspaceId],
+        queryKey: ["tasks", workspaceId],
         queryFn: async () => {
-            const response = await client.api.members.$get({
-                query: { workspaceId }
+            const response = await client.api.tasks.$get({
+                query: {workspaceId}
             })
 
             if (!response.ok) {
-                throw new Error("Failed to fetch members")
+                throw new Error("Failed to fetch tasks")
             }
 
             const { data } = await response.json()
@@ -24,6 +23,5 @@ export const useGetMembers = ({
             return data
         }
     })
-    console.log(query.data)
     return query
 }
