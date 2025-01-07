@@ -12,6 +12,8 @@ interface UseGetTasksProps {
     search?: string | null
 }
 
+export type TasksResponse = Awaited<ReturnType<typeof useGetTasks>>["data"]
+
 export const useGetTasks = ({
     workspaceId,
     projectId,

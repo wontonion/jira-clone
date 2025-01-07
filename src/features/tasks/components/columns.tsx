@@ -5,14 +5,14 @@ import { ArrowUpDown, MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ProjectAvatar } from "@/features/projects/components/project-avatar";
 import { MemberAvatar } from "@/features/members/components/member-avatar";
-import { Task } from "../types";
+import { PopulatedTask } from "../types";
 import { TaskDate } from "./task-date";
 import { snakeCaseToTitleCase } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { TaskActions } from "./task-actions";
 
 
-export const columns: ColumnDef<Task>[] = [
+export const columns: ColumnDef<PopulatedTask>[] = [
     {
         accessorKey: "name",
         header: ({ column }) => {
@@ -72,16 +72,15 @@ export const columns: ColumnDef<Task>[] = [
             )
         },
         cell: ({ row }) => {
-            const assigneeId = row.original.assigneeId
-            
+            const assignee = row.original.assignee
             return (
                 <div className="flex items-center gap-x-2 text-sm font-medium">
                     <MemberAvatar 
                         className="size-6"
                         fallbackClassName="text-xs"
-                        name={assigneeId}
+                        name={assignee.name}
                     />
-                    <p className="line-clamp-1">{assigneeId}</p>
+                    <p className="line-clamp-1">{assignee.name}</p>
                 </div>
             )
         },

@@ -12,6 +12,7 @@ import { DataFilters } from "./data-filters";
 import { useTaskFilters } from "../hooks/use-task-filters";
 import { DataTable } from "./data-table";
 import { columns } from "./columns";
+import { PopulatedTask } from "../types";
 
 export const TaskViewSwitcher = () => {
   const [{
@@ -35,7 +36,8 @@ export const TaskViewSwitcher = () => {
     assigneeId,
     status,
     dueDate,
-   })
+  })
+  
 
   
   return (
@@ -82,8 +84,8 @@ export const TaskViewSwitcher = () => {
         ): (
           
           <div>
-          <TabsContent value="table" className="mt-0">
-           <DataTable columns={columns} data={tasks?.documents?? []} />
+            <TabsContent value="table" className="mt-0">
+           <DataTable columns={columns} data={tasks?.documents as PopulatedTask[] ?? []} />
           
           </TabsContent>
           <TabsContent value="kanban" className="mt-0">
