@@ -17,6 +17,7 @@ export type Task = Models.Document & {
     status: TaskStatus;
     position: number;
     dueDate: string;
+    description: string;
 }
 
 export interface PopulatedTask extends Task {
