@@ -79,12 +79,6 @@ export const EditWorkspaceForm = ({
         form: finalValues,
         param: { workspaceId: initialValues.$id },
       },
-      {
-        onSuccess: ({ data }) => {
-          form.reset();
-          router.push(`/workspaces/${data.$id}`);
-        },
-      }
     );
   };
 
@@ -132,7 +126,6 @@ export const EditWorkspaceForm = ({
       {
         onSuccess: () => {
           toast.success("Invite code reset");
-          router.refresh();
         },
       }
     );
