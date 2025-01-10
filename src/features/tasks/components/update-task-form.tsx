@@ -48,7 +48,6 @@ export const UpdateTaskForm = ({ onCancel, projectOptions, memberOptions, initia
       onSuccess: () => {
         form.reset()
         onCancel?.()
-        // router.push(`/workspaces/${workspaceId}/projects/${data.$id}`)
       }
     });
   };

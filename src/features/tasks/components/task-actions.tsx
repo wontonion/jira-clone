@@ -58,7 +58,6 @@ export const TaskActions = ({ id, projectId, children }: TaskActionsProps) => {
                     </DropdownMenuItem>
                     <DropdownMenuItem
                         onClick={() => { open(id) }}
-                     
                         className="font-medium p-[10px]"
                     >
                         <PencilLineIcon className="size-4 mr-2 stroke-2" />
