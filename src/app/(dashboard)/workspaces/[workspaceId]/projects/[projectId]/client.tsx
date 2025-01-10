@@ -9,32 +9,35 @@ import { useProjectId } from "@/features/projects/hooks/use-project-id"
 import { TaskViewSwitcher } from "@/features/tasks/components/task-view-switcher"
 import { PencilIcon } from "lucide-react"
 import Link from "next/link"
+import { useGetProjectAnalytics } from "@/features/projects/api/use-get-project-analytics"
+import { AnalyticsArea } from "@/components/analytics-area"
+
 
 export const ProjectIdClient = () => {
     const projectId = useProjectId()
+    const { data: project, isLoading: isProjectLoading } = useGetProject({ projectId })
+    const { data: analytics, isLoading: isAnalyticsLoading } = useGetProjectAnalytics({ projectId })
 
-    const { data, isLoading } = useGetProject({
-        projectId
-    })
+    const isLoading = isProjectLoading || isAnalyticsLoading
 
     if (isLoading) return <PageLoader/>
 
-    if (!data) return <PageError message="Project not found" />
+    if (!project) return <PageError message="Project not found" />
 
     return (
         <div className="flex flex-col gap-y-4">
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-x-2">
                     <ProjectAvatar
-                        image={data.imageUrl}
-                        name={data.name}
+                        image={project.imageUrl}
+                        name={project.name}
                         className="size-10"
                     />
-                    <p className="text-lg font-semibold">{ data.name }</p>
+                    <p className="text-lg font-semibold">{ project.name }</p>
                 </div>
                 <div>
                     <Button variant="secondary" size="sm" asChild>
-                        <Link href={`/workspaces/${data.workspaceId}/projects/${data.$id}/settings`}>
+                        <Link href={`/workspaces/${project.workspaceId}/projects/${project.$id}/settings`}>
                             <PencilIcon className="size-4 mr-2"/>
                             Edit Project
                         </Link>
@@ -42,7 +45,12 @@ export const ProjectIdClient = () => {
                     </Button>
                 </div>
             </div>
-                <TaskViewSwitcher hideProjectFilter={true} />
+            {
+                analytics && (
+                    <AnalyticsArea data={analytics} />
+                )
+            }
+            <TaskViewSwitcher hideProjectFilter={true} />
         </div>
     )
 }
