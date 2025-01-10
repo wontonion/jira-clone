@@ -8,6 +8,6 @@ export enum MemberRole {
 export type Member = Models.Document & {
     id: string
     name: string
-    imageUrl: string
+    // imageUrl: string
     role: MemberRole
 }

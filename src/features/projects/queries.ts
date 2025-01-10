@@ -1,5 +1,4 @@
-import { Query } from "node-appwrite"
-import { MEMBERS_ID, PROJECTS_ID, WORKSPACES_ID } from "@/config"
+import { WORKSPACES_ID } from "@/config"
 import { DATABASE_ID } from "@/config"
 import { Project } from "./types"
 import { getMember } from "../members/utils"

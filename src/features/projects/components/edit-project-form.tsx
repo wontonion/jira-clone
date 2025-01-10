@@ -18,13 +18,12 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useRef } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { ArrowLeftIcon, CopyIcon, ImageIcon } from "lucide-react";
+import { ArrowLeftIcon, ImageIcon } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Project } from "../types";
 import { useConfirm } from "@/hooks/use-confirm";
-import { toast } from "sonner";
 import { useUpdateProject } from "../api/use-update-project";
 import { useDeleteProject } from "../api/use-delete-project";
 interface EditProjectFormProps {

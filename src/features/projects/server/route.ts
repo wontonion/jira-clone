@@ -37,7 +37,7 @@ const app = new Hono()
                 return c.json({ error: "Unauthorized" }, 401)
             }
 
-            const projects = await databases.listDocuments(
+            const projects = await databases.listDocuments<Project>(
                 DATABASE_ID,
                 PROJECTS_ID,
                 [
@@ -239,7 +239,7 @@ const app = new Hono()
             const overdueTaskCount = thisMonthOverdueTasks.total
             const overdueTaskDifference = overdueTaskCount - lastMonthOverdueTasks.total
 
-            console.log(thisMonthOverdueTasks)
+            // console.log(thisMonthOverdueTasks)
             return c.json({
                 data: {
                 taskCount,

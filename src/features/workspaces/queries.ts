@@ -57,7 +57,7 @@ interface GetWorkspaceInfoProps {
 export const getWorkspaceInfo = async ({
   workspaceId,
 }: GetWorkspaceInfoProps) => {
-  const { account, databases } = await createSessionClient();
+  const { databases } = await createSessionClient();
 
   const workspace = await databases.getDocument<Workspace>(
     DATABASE_ID,

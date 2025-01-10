@@ -41,11 +41,10 @@ export const DataFilters = ({ hideProjectFilter }: DataFiltersProps) => {
         }
     })
 
-
     const [{
-        status,
-        assigneeId,
-        projectId,
+        // status,
+        // assigneeId,
+        // projectId,
         dueDate,
     }, setFilters] = useTaskFilters()
 
