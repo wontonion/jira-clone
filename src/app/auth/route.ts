@@ -1,5 +1,3 @@
-// src/app/oauth/route.js
-
 import { AUTH_COOKIE } from "@/features/auth/constants";
 import { createAdminClient } from "@/lib/appwrite";
 import { cookies } from "next/headers";
@@ -22,6 +20,6 @@ export async function GET(request: NextRequest) {
     sameSite: "strict",
     secure: true,
   });
-
-  return NextResponse.redirect(`${request.nextUrl.origin}/`);
+  console.log(request.nextUrl.origin)
+  return NextResponse.redirect(`${request.nextUrl.origin}`);
 }

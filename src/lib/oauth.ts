@@ -1,4 +1,3 @@
-// src/lib/server/oauth.js
 "use server";
 
 import { createAdminClient } from "@/lib/appwrite";
