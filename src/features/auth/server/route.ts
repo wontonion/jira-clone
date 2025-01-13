@@ -9,26 +9,20 @@ import { AUTH_COOKIE } from "../constants";
 import { sessionMiddleware } from "@/lib/session-middleware";
 import bcrypt from "bcryptjs"
 import { prisma } from "@/lib/prisma-db";
-import { CookieStore, Session } from "hono-sessions";
+import { SessionData } from "hono-sessions";
 import { sessionMiddleware as honoSessionMiddleware } from "hono-sessions";
+import { PrismaSessionStore, PrismaSessionData } from "../queries";
 
-const store = new CookieStore()
-type SessionType = Session<{
-  user: {
-    id: string;
-    email: string;
-    name: string;
-  }
-}>
+
 
 const app = new Hono<{
   Variables: {
-    session: SessionType
+    session: PrismaSessionData
   }
 }>()
-  .use(honoSessionMiddleware({
-    store,
-    encryptionKey: "password_at_least_32_characters_long",
+.use(honoSessionMiddleware({
+  store: new PrismaSessionStore(),
+  encryptionKey: "password_at_least_32_characters_long",
     cookieOptions: {
       path: "/",
       httpOnly: true,
@@ -64,7 +58,7 @@ const app = new Hono<{
     })
 
     // get session from context 
-    const session: SessionType = c.get("session")
+    const session: PrismaSessionData = c.get("session")
     session.set("user", {
       id: newUser.id,
       email: newUser.email,
@@ -72,13 +66,13 @@ const app = new Hono<{
     })
     
     
-    setCookie(c, AUTH_COOKIE, JSON.stringify(session), {
-      path: "/",
-      httpOnly: true,
-      secure: true,
-      sameSite: "strict",
-      maxAge: 60 * 60 * 24 * 7,
-    })
+    // setCookie(c, AUTH_COOKIE, JSON.stringify(session), {
+    //   path: "/",
+    //   httpOnly: true,
+    //   secure: true,
+    //   sameSite: "strict",
+    //   maxAge: 60 * 60 * 24 * 7,
+    // })
     
     return c.json({
       success: true,
