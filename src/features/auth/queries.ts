@@ -4,12 +4,12 @@
 // import { randomUUID } from "crypto"
 // import { Session, SessionData, Store } from "hono-sessions"
 
-import { verify } from "hono/jwt"
 import { cookies } from "next/headers"
 import { JWT_AUTH } from "./constants"
 import { prisma } from "@/lib/prisma-db"
 import { Context } from "hono"
 import { getCookie } from "hono/cookie"
+import jwt from "jsonwebtoken"
 
 // export type PrismaSessionData = Session<{
 //     user: {
@@ -120,24 +120,39 @@ export const getCurrent = async (c?: Context) => {
         let jwtToken: string | undefined
 
         if (c) {
-            // Hono API 路由中调用
             jwtToken = getCookie(c, JWT_AUTH)
         } else {
-            // Next.js 服务端组件中调用
             const cookieStore = cookies()
             jwtToken = cookieStore.get(JWT_AUTH)?.value
         }
 
-        if (!jwtToken) return null
+        if (!jwtToken) {
+            console.log("No JWT token found")
+            return null
+        }
         
-        const { id } = await verify(jwtToken, process.env.JWT_SECRET!)
-        const user = await prisma.user.findUnique({
-            where: {
-                id: id as string
+        try {
+            const decoded = jwt.verify(jwtToken, process.env.JWT_SECRET!)
+            console.log("Decoded token:", decoded)
+            
+            const user = await prisma.user.findUnique({
+                where: {
+                    id: (decoded as { id: string }).id
+                }
+            })
+            
+            if (!user) {
+                console.log("User not found in database")
+                return null
             }
-        })
-        return user
-    } catch {
+            
+            return user
+        } catch (verifyError) {
+            console.error("JWT verification failed:", verifyError)
+            return null
+        }
+    } catch (error) {
+        console.error("getCurrent error:", error)
         return null
     }
 }

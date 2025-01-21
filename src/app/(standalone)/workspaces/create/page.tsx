@@ -4,6 +4,7 @@ import { redirect } from "next/navigation"
 
 const WorkspaceCreatePage = async () => {
     const user = await getCurrent()
+    console.log("user in workspace create page", user)
     if (!user) {
         redirect("/sign-in")
     }
