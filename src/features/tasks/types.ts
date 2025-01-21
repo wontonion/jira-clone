@@ -1,35 +1,20 @@
-import { Models } from "node-appwrite";
-import { Project } from "../projects/types";
+import { Member, Project, Task, User } from "@prisma/client";
 
-export enum TaskStatus {
-    BACKLOG = "BACKLOG",
-    TODO = "TODO",
-    IN_PROGRESS = "IN_PROGRESS",
-    IN_REVIEW = "IN_REVIEW",
-    DONE = "DONE",
-}
+// export enum TaskStatus {
+//     BACKLOG = "BACKLOG",
+//     TODO = "TODO",
+//     IN_PROGRESS = "IN_PROGRESS",
+//     IN_REVIEW = "IN_REVIEW",
+//     DONE = "DONE",
+// }
 
-export type Task = Models.Document & {
-    workspaceId: string;
-    projectId: string;
-    assigneeId: string;
-    name: string;
-    status: TaskStatus;
-    position: number;
-    dueDate: string;
-    description: string;
-}
+// export type Task = PrismaTask2
 
 export interface PopulatedTask extends Task {
   project: Project;
-  assignee: {
-    name: string;
-    email: string;
-    $id: string;
-    $collectionId: string;
-    $databaseId: string;
-    $createdAt: string;
-    $updatedAt: string;
-    $permissions: string[];
-  };
+  assignee: PopulatedMember;
+}
+
+export interface PopulatedMember extends Member {
+  user: User;
 }

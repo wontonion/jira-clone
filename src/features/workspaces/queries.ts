@@ -1,26 +1,32 @@
-import { Query } from "node-appwrite";
-import { MEMBERS_ID, WORKSPACES_ID } from "@/config";
-import { DATABASE_ID } from "@/config";
-import { Workspace } from "./types";
 import { getMember } from "../members/utils";
-import { createSessionClient } from "@/lib/appwrite";
+import { prisma } from "@/lib/prisma-db";
+import { getCurrent } from "../auth/queries";
+
 
 export const getWorkspaces = async () => {
-  const { account, databases } = await createSessionClient();
 
-  const user = await account.get();
+  const user = await getCurrent();
 
-  const members = await databases.listDocuments(DATABASE_ID, MEMBERS_ID, [
-    Query.equal("userId", user.$id),
-  ]);
-  if (!members) throw new Error("Unauthorized");
+  if (!user) throw new Error("Get workspaces: User not found");
+  const members = await prisma.member.findMany({
+    where: {
+      userId: user.id
+    }
+  });
+  if (!members) throw new Error("Get workspaces: Members not found");
 
-  const workspaceIds = members.documents.map((member) => member.workspaceId);
+  const workspaceIds = members.map((member) => member.workspaceId);
 
-  const workspaces = await databases.listDocuments(DATABASE_ID, WORKSPACES_ID, [
-    Query.contains("$id", workspaceIds),
-    Query.orderDesc("$createdAt"),
-  ]);
+  const workspaces = await prisma.workspace.findMany({
+    where: {
+      id: {
+        in: workspaceIds
+      }
+    },
+    orderBy: {
+      createdAt: "desc"
+    }
+  });
 
   return workspaces;
 };
@@ -30,22 +36,21 @@ interface GetWorkspaceProps {
 }
 
 export const getWorkspace = async ({ workspaceId }: GetWorkspaceProps) => {
-  const { account, databases } = await createSessionClient();
-
-  const user = await account.get();
+  const user = await getCurrent();
+  if (!user) throw new Error("Get workspace: User not found");
 
   const member = await getMember({
-    databases,
-    userId: user.$id,
+    userId: user.id,
     workspaceId,
   });
-  if (!member) throw new Error("Unauthorized");
+  if (!member) throw new Error("Get workspace: Member not found");
 
-  const workspace = await databases.getDocument<Workspace>(
-    DATABASE_ID,
-    WORKSPACES_ID,
-    workspaceId
-  );
+  const workspace = await prisma.workspace.findUnique({
+    where: {
+      id: workspaceId
+    }
+  });
+  if (!workspace) throw new Error("Get workspace: Workspace not found");
 
   return workspace;
 };
@@ -57,14 +62,10 @@ interface GetWorkspaceInfoProps {
 export const getWorkspaceInfo = async ({
   workspaceId,
 }: GetWorkspaceInfoProps) => {
-  const { databases } = await createSessionClient();
-
-  const workspace = await databases.getDocument<Workspace>(
-    DATABASE_ID,
-    WORKSPACES_ID,
-    workspaceId
-  );
-
+  const workspace = await getWorkspace({
+    workspaceId,
+  });
+  if (!workspace) throw new Error("Get workspace info: Workspace not found");
   return {
     name: workspace.name,
   };

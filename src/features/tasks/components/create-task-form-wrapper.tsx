@@ -24,17 +24,19 @@ export const CreateTaskFormWrapper = ({
         data: members,
         isLoading: isLoadingMembers,
     } = useGetMembers({ workspaceId })
-    console.log(members)
+
+    if (!members) return null
+    if (!projects) return null
     
-    const projectOptions = projects?.documents.map((project) => ({
-        id: project.$id,
+    const projectOptions = projects.map((project) => ({
+        id: project.id,
         name: project.name,
-        imageUrl: project.imageUrl,
+        imageUrl: project.imageUrl ?? "",
     }))
 
-    const memberOptions = members?.documents.map((member) => ({
-        id: member.$id,    
-        name: member.name,
+    const memberOptions = members.map((member) => ({
+        id: member.id,    
+        name: member.name ?? member.email ?? "",
     }))
 
     const isLoading = isLoadingProjects || isLoadingMembers

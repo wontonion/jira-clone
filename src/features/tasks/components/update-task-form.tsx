@@ -20,15 +20,16 @@ import { cn } from "@/lib/utils";
 import { DatePicker } from "@/components/date-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MemberAvatar } from "@/features/members/components/member-avatar";
-import { Task, TaskStatus } from "../types";
+import { TaskStatus } from "@prisma/client";
 import { ProjectAvatar } from "@/features/projects/components/project-avatar";
 import { useUpdateTask } from "../api/use-update-task";
+import { PopulatedTask } from "../types";
 
 interface UpdateTaskFormProps {
   onCancel?: () => void;
   projectOptions:{id: string, name: string, imageUrl: string}[]
   memberOptions:{id:string, name: string}[]
-  initialValues: Task
+  initialValues: PopulatedTask
 }
 
 export const UpdateTaskForm = ({ onCancel, projectOptions, memberOptions, initialValues }: UpdateTaskFormProps) => {
@@ -40,11 +41,12 @@ export const UpdateTaskForm = ({ onCancel, projectOptions, memberOptions, initia
     defaultValues: {
       ...initialValues,
       dueDate: initialValues.dueDate ? new Date(initialValues.dueDate) : undefined,
+      description: initialValues.description ?? undefined,
     },
   });
 
   const onSubmit = async (values: z.infer<typeof createTaskSchema>) => {
-    mutate({ json: values, param: {taskId: initialValues.$id}}, {
+    mutate({ json: values, param: {taskId: initialValues.id}}, {
       onSuccess: () => {
         form.reset()
         onCancel?.()

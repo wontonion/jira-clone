@@ -1,5 +1,4 @@
 import { Button } from "@/components/ui/button";
-import { Task } from "../types";
 import { PencilIcon } from "lucide-react";
 import { DottedSeparator } from "@/components/ui/dotted-seperator";
 import { OverviewProperty } from "./overview-property";
@@ -8,9 +7,10 @@ import { TaskDate } from "./task-date";
 import { Badge } from "@/components/ui/badge";
 import { snakeCaseToTitleCase } from "@/lib/utils";
 import { useUpdateTaskModal } from "../hooks/use-update-task-modal";
+import { PopulatedTask } from "../types";
 
 interface TaskOverviewProps {
-    task: Task;
+    task:PopulatedTask;
 }
 
 export const TaskOverview = ({
@@ -26,7 +26,7 @@ export const TaskOverview = ({
                 <Button
                     size="sm"
                         variant="secondary"
-                        onClick={() => open(task.$id)}
+                        onClick={() => open(task.id)}
                     >
                     <PencilIcon className="size-4 mr-2" />
                     Edit
@@ -36,14 +36,14 @@ export const TaskOverview = ({
                 <div className="flex flex-col gap-y-4">
                     <OverviewProperty label="assignee">
                         <MemberAvatar 
-                            name={task.assignee?.name}
+                            name={task.assignee?.user.name}
                             className="size-6"
                         />
-                        <p className="text-sm font-medium">{task.assignee?.name}</p>
+                        <p className="text-sm font-medium">{task.assignee?.user.name}</p>
                     </OverviewProperty>
                     <OverviewProperty label="Due Date">
                         <TaskDate 
-                            value={task.dueDate}
+                            value={task.dueDate?.toISOString()}
                             className="text-sm font-medium"
                         />
                     </OverviewProperty>

@@ -3,7 +3,7 @@ import { useGetMembers } from "@/features/members/api/use-get-members"
 import { useGetProjects } from "@/features/projects/api/use-get-projects"
 import { useWorkspaceId } from "@/features/workspaces/hooks/use-workspace-id"
 import { Building2Icon, ListFilterIcon, UserIcon } from "lucide-react"
-import { TaskStatus } from "../types"
+import { TaskStatus } from "@prisma/client"
 import { useTaskFilters } from "../hooks/use-task-filters"
 import { DatePicker } from "@/components/date-picker"
 
@@ -27,16 +27,16 @@ export const DataFilters = ({ hideProjectFilter }: DataFiltersProps) => {
     const isLoading = isProjectsLoading || isMembersLoading
 
 
-    const projectOptions = projects?.documents.map((project) => {
+    const projectOptions = projects?.map((project) => {
         return {
-            value: project.$id,
+            value: project.id,
             label: project.name,
         }
     })
 
-    const memberOptions = members?.documents.map((member) => {
+    const memberOptions = members?.map((member) => {
         return {
-            value: member.$id,
+            value: member.id,
             label: member.name,
         }
     })

@@ -1,6 +1,6 @@
 import { client } from "@/lib/rpc"
 import { useQuery } from "@tanstack/react-query"
-import { TaskStatus } from "../types"
+import { TaskStatus } from "@prisma/client"
 
 
 interface UseGetTasksProps {
@@ -35,11 +35,11 @@ export const useGetTasks = ({
             const response = await client.api.tasks.$get({
                 query: {
                     workspaceId,
-                    projectId: projectId ?? undefined,
-                    assigneeId: assigneeId ?? undefined,
-                    status: status ?? undefined,
-                    dueDate: dueDate ?? undefined,
-                    search: search ?? undefined
+                    projectId: projectId ?? [],
+                    assigneeId: assigneeId ?? [],
+                    status: status ?? [],
+                    dueDate: dueDate ?? [],
+                    search: search ?? []
                 }
             })
 
@@ -48,8 +48,25 @@ export const useGetTasks = ({
             }
 
             const { data } = await response.json()
+
             
-            return data
+            const formattedData = data.map((task) => ({
+                ...task,
+                createdAt: new Date(task.createdAt),
+                updatedAt: new Date(task.updatedAt),
+                dueDate: new Date(task.dueDate),
+                project: {
+                    ...task.project,
+                    createdAt: new Date(task.project!.createdAt),
+                    updatedAt: new Date(task.project!.updatedAt),
+                },
+                assignee: {
+                    ...task.assignee,
+                    createdAt: new Date(task.assignee!.createdAt),
+                    updatedAt: new Date(task.assignee!.updatedAt),
+                }
+            }))
+            return formattedData
         }
     })
     return query

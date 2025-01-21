@@ -7,26 +7,16 @@ datasource db {
   url      = env("POSTGRES_DATABASE_URL")
 }
 
-model Session {
-  id        String   @id @default(cuid())
-  sid       String   @unique  // Session ID for lookup
-  data      String   // JSON string of session data
-  expiresAt DateTime
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
-  name      String
+  name      String   @unique
   password  String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   workspaces Workspace[]
   members    Member[]
 }
-
 
 model Workspace {
   id         String    @id @default(cuid())
@@ -40,27 +30,35 @@ model Workspace {
   members    Member[]
   user       User      @relation(fields: [userId], references: [id])
 }
+
 model Project {
   id          String   @id @default(cuid())
   name        String
-  imageUrl    String?
+  imageUrl    String?  @db.Text
   workspaceId String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   workspace   Workspace @relation(fields: [workspaceId], references: [id])
   tasks       Task[]
 }
+enum TaskStatus {
+  BACKLOG 
+  TODO 
+  IN_PROGRESS 
+  IN_REVIEW 
+  DONE 
+}
 
 model Task {
   id          String   @id @default(cuid())
   name        String
-  status      String
+  status      TaskStatus
   position    Int
   description String?
-  dueDate     DateTime?
-  assigneeId  String?
-  projectId   String
+  dueDate     DateTime
   workspaceId String
+  projectId   String
+  assigneeId  String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   project     Project  @relation(fields: [projectId], references: [id])
@@ -70,10 +68,14 @@ model Member {
   id          String    @id @default(cuid())
   userId      String
   workspaceId String
-  role        String    @default("MEMBER")
+  role        MemberRole @default(MEMBER)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   workspace   Workspace @relation(fields: [workspaceId], references: [id])
   user        User      @relation(fields: [userId], references: [id])
 }
 
+enum MemberRole {
+  ADMIN
+  MEMBER
+}

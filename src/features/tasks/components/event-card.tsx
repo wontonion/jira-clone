@@ -1,16 +1,16 @@
-import { TaskStatus } from "../types";
+import { TaskStatus } from "@prisma/client";
 import { cn } from "@/lib/utils";
 import { MemberAvatar } from "@/features/members/components/member-avatar";
 import { ProjectAvatar } from "@/features/projects/components/project-avatar";
 import { useWorkspaceId } from "@/features/workspaces/hooks/use-workspace-id";
 import { useRouter } from "next/navigation";
-import { Project } from "@/features/projects/types";
-import { Member } from "@/features/members/types";
+import { Project } from "@prisma/client";
+import { PopulatedMember } from "../types";
 
 interface EventCardProps {
     id: string;
     title: string;
-    assignee: Member;
+    assignee: PopulatedMember;
     project: Project;
     status: TaskStatus;
 }
@@ -46,12 +46,12 @@ export const EventCard = ({ id, title, assignee, project, status }: EventCardPro
                 <p>{title}</p>
                 <div className="flex items-center gap-x-1">
                     <MemberAvatar
-                        name={assignee?.name}
+                        name={assignee?.user?.name}
                     />
                     <div className="size-1 rounded-full bg-neutral-400"></div>
                     <ProjectAvatar
                         name={project?.name}
-                        image={project?.imageUrl}
+                        image={project?.imageUrl ?? undefined}
                     />
                 </div>
             </div>

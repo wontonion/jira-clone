@@ -12,12 +12,13 @@ import { DataFilters } from "./data-filters";
 import { useTaskFilters } from "../hooks/use-task-filters";
 import { DataTable } from "./data-table";
 import { columns } from "./columns";
-import { PopulatedTask, TaskStatus } from "../types";
 import { DataKanban } from "./data-kanban";
 import { useCallback } from "react";
 import { useBulkUpdateTask } from "../api/use-bulk-update-task";
 import { DataCalendar } from "./data-calendar";
 import { useProjectId } from "@/features/projects/hooks/use-project-id";
+import { TaskStatus } from "@prisma/client";
+import { PopulatedTask } from "../types";
 
 interface TaskViewSwitcherProps {
   hideProjectFilter?: boolean
@@ -38,7 +39,7 @@ export const TaskViewSwitcher = ({ hideProjectFilter }: TaskViewSwitcherProps) =
   
   const { mutate } = useBulkUpdateTask()
   const {
-    data: tasks,
+    data: tasksResponse,
     isLoading: isTasksLoading,
   } = useGetTasks({
     workspaceId,
@@ -49,7 +50,7 @@ export const TaskViewSwitcher = ({ hideProjectFilter }: TaskViewSwitcherProps) =
   })
   
   const onKanbanChange = useCallback((
-    tasks: { $id: string; status: TaskStatus;  position: number}[]
+    tasks: { id: string; status: TaskStatus;  position: number}[]
   ) => {
     mutate({
       json: {
@@ -104,18 +105,18 @@ export const TaskViewSwitcher = ({ hideProjectFilter }: TaskViewSwitcherProps) =
           
           <div>
             <TabsContent value="table" className="mt-0">
-           <DataTable columns={columns} data={tasks?.documents as PopulatedTask[] ?? []} />
+           <DataTable columns={columns} data={tasksResponse as PopulatedTask[] ?? []} />
           
           </TabsContent>
           <TabsContent value="kanban" className="mt-0">
                 <DataKanban
-                  data={tasks?.documents ?? []}
+                  data={tasksResponse as PopulatedTask[] ?? []}
                   onChange={onKanbanChange}
                   />
           
           </TabsContent>
           <TabsContent value="calendar" className="mt-0">
-          < DataCalendar data={tasks?.documents as PopulatedTask[] ?? []} />
+          < DataCalendar data={tasksResponse as PopulatedTask[] ?? []} />
           </TabsContent>
           </div>
         )}

@@ -5,11 +5,12 @@ import { ArrowUpDown, MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ProjectAvatar } from "@/features/projects/components/project-avatar";
 import { MemberAvatar } from "@/features/members/components/member-avatar";
-import { PopulatedTask } from "../types";
+import { TaskStatus } from "@prisma/client";
 import { TaskDate } from "./task-date";
 import { snakeCaseToTitleCase } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { TaskActions } from "./task-actions";
+import { PopulatedTask } from "../types";
 
 
 export const columns: ColumnDef<PopulatedTask>[] = [
@@ -51,7 +52,7 @@ export const columns: ColumnDef<PopulatedTask>[] = [
                     <ProjectAvatar 
                         className="size-6"
                         name={project.name}
-                        image={project.imageUrl}
+                        image={project.imageUrl ?? undefined}
                     />
                     <p className="line-clamp-1">{project.name}</p>
                 </div>
@@ -78,9 +79,9 @@ export const columns: ColumnDef<PopulatedTask>[] = [
                     <MemberAvatar 
                         className="size-6"
                         fallbackClassName="text-xs"
-                        name={assignee.name}
+                        name={assignee.user.name}
                     />
-                    <p className="line-clamp-1">{assignee.name}</p>
+                    <p className="line-clamp-1">{assignee.user.name}</p>
                 </div>
             )
         },
@@ -102,7 +103,7 @@ export const columns: ColumnDef<PopulatedTask>[] = [
             const dueDate = row.original.dueDate
             
             return (
-                <TaskDate value={dueDate} />
+                <TaskDate value={dueDate?.toISOString() ?? ""} />
             )
                 
         },
@@ -123,7 +124,7 @@ export const columns: ColumnDef<PopulatedTask>[] = [
         cell: ({ row }) => {
             const status = row.original.status
             return (
-                <Badge variant={status}>
+                <Badge variant={status as TaskStatus}>
                     {snakeCaseToTitleCase(status)}
                 </Badge>
             )
@@ -132,7 +133,7 @@ export const columns: ColumnDef<PopulatedTask>[] = [
     {
         accessorKey: "actions",
         cell: ({ row }) => {
-            const id = row.original.$id
+            const id = row.original.id
             const projectId = row.original.projectId
 
             return (

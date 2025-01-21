@@ -1,8 +1,9 @@
 import { DragDropContext, Draggable, Droppable, DropResult } from "@hello-pangea/dnd";
-import { Task, TaskStatus } from "../types";
+import { Task, TaskStatus } from "@prisma/client";
 import { useCallback, useEffect, useState } from "react";
 import { KanbanColumnHeader } from "./kanban-column-header";
 import { KanbanCard } from "./kanban-card";
+import { PopulatedTask } from "../types";
 const boards: TaskStatus[] = [
     TaskStatus.BACKLOG,
     TaskStatus.TODO,
@@ -17,7 +18,7 @@ type TaskState = {
 
 interface DataKanbanProps {
     data: Task[]
-    onChange: (updates: { $id: string; status: TaskStatus; position: number }[]) => void
+    onChange: (updates: { id: string; status: TaskStatus; position: number }[]) => void
 }
 
 
@@ -35,7 +36,7 @@ export const DataKanban = ({
         }
 
         data.forEach((task) => {
-            initialTasks[task.status].push(task)
+            initialTasks[task.status as TaskStatus].push(task)
         })
 
         Object.keys(initialTasks).forEach((status) => {
@@ -73,7 +74,7 @@ export const DataKanban = ({
         const sourceStatus = source.droppableId as TaskStatus
         const destStatus = destination.droppableId as TaskStatus
 
-        let updatesPayload: { $id: string; status: TaskStatus; position: number }[] = []
+        let updatesPayload: { id: string; status: TaskStatus; position: number }[] = []
         
         setTasks((prevTasks) => {
             const newTasks = { ...prevTasks }
@@ -107,18 +108,18 @@ export const DataKanban = ({
 
             // always update the moved task
             updatesPayload.push({
-                $id: updatedMovedTask.$id,
+                id: updatedMovedTask.id,
                 status: destStatus,
                 position: Math.min((destination.index + 1) * 1000, 1_000_000)
             })
 
             // update the position of the task in the destination col
             newTasks[destStatus].forEach((task, index) => {
-                if (task && task.$id !== updatedMovedTask.$id) {
+                if (task && task.id !== updatedMovedTask.id) {
                     const newPosition = Math.min((index + 1) * 1000, 1_000_000)
                     if (task.position !== newPosition) {
                         updatesPayload.push({
-                            $id: task.$id,
+                            id: task.id,
                             status: destStatus,
                             position: newPosition
                         })
@@ -156,8 +157,8 @@ export const DataKanban = ({
                                     >
                                         {tasks[board].map((task, index) => (
                                             <Draggable
-                                                key={task.$id}
-                                                draggableId={task.$id}
+                                                key={task.id}
+                                                draggableId={task.id}
                                                 index={index}
                                             >
                                                 {(provided) => {
@@ -167,7 +168,7 @@ export const DataKanban = ({
                                                             {...provided.draggableProps}
                                                             {...provided.dragHandleProps}
                                                     >
-                                                        <KanbanCard task={task} />
+                                                        <KanbanCard task={task as PopulatedTask} />
 
                                                         </div>
                                                     )

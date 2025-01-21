@@ -23,7 +23,7 @@ import { ArrowLeftIcon, CopyIcon, ImageIcon } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { Workspace } from "../types";
+import { Workspace } from "@prisma/client";
 import { useConfirm } from "@/hooks/use-confirm";
 import { useDeleteWorkspace } from "../api/use-delete-workspace";
 import { toast } from "sonner";
@@ -77,7 +77,7 @@ export const EditWorkspaceForm = ({
     mutate(
       {
         form: finalValues,
-        param: { workspaceId: initialValues.$id },
+        param: { workspaceId: initialValues.id },
       },
     );
   };
@@ -94,7 +94,7 @@ export const EditWorkspaceForm = ({
     if (!ok) return;
     deleteWorkspace(
       {
-        param: { workspaceId: initialValues.$id },
+        param: { workspaceId: initialValues.id },
       },
       {
         onSuccess: () => {
@@ -104,7 +104,7 @@ export const EditWorkspaceForm = ({
     );
   }
 
-  const fullInviteLink = `${window.location.origin}/workspaces/${initialValues.$id}/join/${initialValues.inviteCode}`
+  const fullInviteLink = `${window.location.origin}/workspaces/${initialValues.id}/join/${initialValues.inviteCode}`
 
   const handleCopyInviteLink = () => {
     navigator.clipboard.writeText(fullInviteLink)
@@ -121,7 +121,7 @@ export const EditWorkspaceForm = ({
     if (!ok) return;
     resetInviteCode(
       {
-        param: { workspaceId: initialValues.$id },
+        param: { workspaceId: initialValues.id },
       },
       {
         onSuccess: () => {

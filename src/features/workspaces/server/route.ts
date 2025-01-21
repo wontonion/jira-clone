@@ -1,44 +1,46 @@
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { createWorkspaceSchema, updateWorkspaceSchema } from "../schemas";
-import { sessionMiddleware } from "@/lib/session-middleware";
-import { DATABASE_ID, IMAGES_BUCKET_ID, MEMBERS_ID, TASKS_ID, WORKSPACES_ID } from "@/config";
-import { ID, Query } from "node-appwrite";
-import { MemberRole } from "@/features/members/types";
 import { generateInviteCode } from "@/lib/utils";
 import { getMember } from "@/features/members/utils";
 import { z } from "zod";
-import { Workspace } from "../types";
 import { endOfMonth, startOfMonth, subMonths } from "date-fns";
-import { TaskStatus } from "@/features/tasks/types";
+import { MemberRole, TaskStatus } from "@prisma/client";
+import { prisma } from "@/lib/prisma-db";
+import { jwtMiddleware } from "@/lib/jwt-middleware";
 
 const app = new Hono()
     // get workspaces
     .get("/",
-        sessionMiddleware,
+        jwtMiddleware,
         async (c) => {
             const user = c.get("user")
-            const databases = c.get("databases")
             
-            const members = await databases.listDocuments(
-                DATABASE_ID,
-                MEMBERS_ID,
-                [Query.equal("userId", user.$id)]
-            )
-            if (members.total === 0) {
-                return c.json({ data: {documents: [], total: 0} })
+            const members = await prisma.member.findMany({
+                where: {
+                    userId: user.id
+                }
+            })
+            if (members.length === 0) {
+                return c.json({ data: [] })
             }
-            const workspaceIds = members.documents.map(
+            const workspaceIds = members.map(
                 (member) => member.workspaceId
             )
-            const workspaces = await databases.listDocuments(
-                DATABASE_ID,
-                WORKSPACES_ID,
-                [
-                    Query.contains("$id", workspaceIds),
-                    Query.orderDesc("$createdAt")
-                ]
-            )
+            const workspaces = await prisma.workspace.findMany({
+                where: {
+                    id: {
+                        in: workspaceIds
+                    }
+                },
+                include: {
+                    members: true,
+                    projects: true,
+                },
+                orderBy: {
+                    createdAt: "desc"
+                }
+            })
 
 
             return c.json({ data: workspaces })
@@ -46,17 +48,15 @@ const app = new Hono()
     // get single workspace
     .get(
         "/:workspaceId",
-        sessionMiddleware,
+        jwtMiddleware,
         async (c) => {
             const user = c.get("user")
-            const databases = c.get("databases")
             const { workspaceId } = c.req.param()
             
 
             const member = await getMember({
-                databases,
                 workspaceId,
-                userId: user.$id
+                userId: user.id
             })
 
             if (!member) {
@@ -64,11 +64,15 @@ const app = new Hono()
             }
 
 
-            const workspace = await databases.getDocument<Workspace>(
-                DATABASE_ID,
-                WORKSPACES_ID,
-                workspaceId
-            )
+            const workspace = await prisma.workspace.findUnique({
+                where: {
+                    id: workspaceId
+                },
+                include: {
+                    members: true,
+                    projects: true,
+                }
+            })
 
             return c.json({ data: workspace })
         }
@@ -76,21 +80,28 @@ const app = new Hono()
     //get workspace info
     .get(
         "/:workspaceId/info",
-        sessionMiddleware,
+        jwtMiddleware,
         async (c) => {
             // const user = c.get("user")
-            const databases = c.get("databases")
             const { workspaceId } = c.req.param()
 
-            const workspace = await databases.getDocument<Workspace>(
-                DATABASE_ID,
-                WORKSPACES_ID,
-                workspaceId
-            )
+            const workspace = await prisma.workspace.findUnique({
+                where: {
+                    id: workspaceId
+                },
+                include: {
+                    members: true,
+                    projects: true,
+                }
+            })
+
+            if (!workspace) {
+                return c.json({ error: "Workspace not found" }, 404)
+            }
 
             return c.json({
                 data: {
-                    $id: workspace.$id,
+                    id: workspace.id,
                     name: workspace.name,
                     imageUrl: workspace.imageUrl,
                 }
@@ -101,10 +112,8 @@ const app = new Hono()
     .post(
         "/",
         zValidator("form", createWorkspaceSchema),
-        sessionMiddleware,
+        jwtMiddleware,
         async (c) => {
-            const databases = c.get("databases") // need to add database for sessionMiddleware?
-            const storage = c.get("storage")
             const user = c.get("user")
 
             const { name, image } = c.req.valid("form")
@@ -118,62 +127,45 @@ const app = new Hono()
             console.log('Image properties:', Object.getOwnPropertyNames(image))
             if (image && typeof image === 'object' && 'name' in image && 'size' in image) {
             // if (image instanceof File) { 
-                const file = await storage.createFile(
-                    IMAGES_BUCKET_ID,
-                    ID.unique(),
-                    image,
-                )
-                
-                const arrayBuffer = await storage.getFilePreview(
-                    IMAGES_BUCKET_ID,
-                    file.$id
-                )
-                
-                uploadedImageUrl = `data:image/png;base64,${Buffer.from(arrayBuffer).toString("base64")}`
+                const arrayBuffer = await image.arrayBuffer()
+                const buffer = Buffer.from(arrayBuffer)
+                uploadedImageUrl = `data:${image.type};base64,${buffer.toString('base64')}`
             }
+
             // create workspace
-            const workspace = await databases.createDocument(
-                DATABASE_ID,
-                WORKSPACES_ID,
-                ID.unique(),
-                {
+            const workspace = await prisma.workspace.create({
+                data: {
                     name,
-                    userId: user.$id,
+                    userId: user.id,
                     imageUrl: uploadedImageUrl,
                     inviteCode: generateInviteCode(10)
                 }
-            )
+            })
             // create according member
-            await databases.createDocument(
-                DATABASE_ID,
-                MEMBERS_ID,
-                ID.unique(),
-                {
-                    userId: user.$id,
-                    workspaceId: workspace.$id,
+            await prisma.member.create({
+                data: {
+                    userId: user.id,
+                    workspaceId: workspace.id,
                     role: MemberRole.ADMIN
                 }
-            )
+            })
 
             return c.json({ data: workspace})
         })
 // update workspace
     .patch(
         "/:workspaceId",
-        sessionMiddleware,
+        jwtMiddleware,
         zValidator("form", updateWorkspaceSchema),
         async (c) => { 
-                const databases = c.get("databases")
-                const storage = c.get("storage")
                 const user = c.get("user")
-                
+
                 const { workspaceId } = c.req.param()
                 const { name, image } = c.req.valid("form")
                 
             const member = await getMember({
-                databases,
                 workspaceId,
-                userId: user.$id
+                userId: user.id
             })
 
             if (!member || member.role !== MemberRole.ADMIN) {
@@ -186,46 +178,37 @@ const app = new Hono()
 
             if (image && typeof image === 'object' && 'name' in image && 'size' in image) {
             // if (image instanceof File) { 
-                const file = await storage.createFile(
-                    IMAGES_BUCKET_ID,
-                    ID.unique(),
-                    image,
-                )
-                
-                const arrayBuffer = await storage.getFilePreview(
-                    IMAGES_BUCKET_ID,
-                    file.$id
-                )
-                
-                uploadedImageUrl = `data:image/png;base64,${Buffer.from(arrayBuffer).toString("base64")}`
+                const arrayBuffer = await image.arrayBuffer()
+                const buffer = Buffer.from(arrayBuffer)
+                uploadedImageUrl = `data:${image.type};base64,${buffer.toString('base64')}`
             }
+
+            // 2. make up new workspace
             
             // 2. make up new workspace
-            const workspace = await databases.updateDocument(
-                DATABASE_ID,
-                WORKSPACES_ID,
-                workspaceId,
-                {
+            const workspace = await prisma.workspace.update({
+                where: {
+                    id: workspaceId
+                },
+                data: {
                     name,
                     imageUrl: uploadedImageUrl
                 }
-            )
+            })
 
             return c.json({ data: workspace })
         })
 // delete workspace
     .delete(
         "/:workspaceId",
-        sessionMiddleware,
+        jwtMiddleware,
         async (c) => {
-            const databases = c.get("databases")
             const user = c.get("user")
             const { workspaceId } = c.req.param()
 
             const member = await getMember({
-                databases,
                 workspaceId,
-                userId: user.$id
+                userId: user.id
             })
 
             if (!member || member.role !== MemberRole.ADMIN) {
@@ -234,38 +217,40 @@ const app = new Hono()
             
             // TODO : delete members projects and tasks
             
-            await databases.deleteDocument(DATABASE_ID, WORKSPACES_ID, workspaceId)
+            await prisma.workspace.delete({
+                where: {
+                    id: workspaceId
+                }
+            })
 
-            return c.json({ data: { $id: workspaceId } })
+            return c.json({ data: { id: workspaceId } })
         }
 )
 // reset invite code
     .post(
         "/:workspaceId/reset-invite-code",
-        sessionMiddleware,
+        jwtMiddleware,
         async (c) => {
-            const databases = c.get("databases")
             const user = c.get("user")
             const { workspaceId } = c.req.param()
 
             const member = await getMember({
-                databases,
                 workspaceId,
-                userId: user.$id
+                userId: user.id
             })
 
             if (!member || member.role !== MemberRole.ADMIN) {
                 return c.json({ error: "Unauthorized" }, 401)
             }
             
-           const workspace = await databases.updateDocument(
-            DATABASE_ID,
-            WORKSPACES_ID,
-            workspaceId,
-            {
-                inviteCode: generateInviteCode(10)
-            }
-           )
+           const workspace = await prisma.workspace.update({
+                where: {
+                    id: workspaceId
+                },
+                data: {
+                    inviteCode: generateInviteCode(10)
+                }
+            })
 
             return c.json({ data: workspace })
         }
@@ -273,46 +258,48 @@ const app = new Hono()
 // join workspace
     .post(
         "/:workspaceId/join",
-        sessionMiddleware,
+        jwtMiddleware,
         zValidator("json", z.object({code: z.string()})),
         async (c) => {
             const { workspaceId } = c.req.param()
             const { code } = c.req.valid("json")
 
-            const databases = c.get("databases")
             const user = c.get("user")
 
             const member = await getMember({
-                databases,
                 workspaceId,
-                userId: user.$id
+                userId: user.id
             })
 
             if (member) {
                 return c.json({ error: "Already a member" }, 400)
             }
 
-            const workspace = await databases.getDocument<Workspace>(
-                DATABASE_ID,
-                WORKSPACES_ID,
-                workspaceId
-            )
+            const workspace = await prisma.workspace.findUnique({
+                where: {
+                    id: workspaceId
+                },
+                include: {
+                    members: true,
+                    projects: true,
+                }
+            })
 
+            if (!workspace) {
+                return c.json({ error: "Workspace not found" }, 404)
+            }
 
             if (workspace.inviteCode !== code) {
                 return c.json({ error: "Invalid invite code" }, 400)
             }
 
-            await databases.createDocument(
-                DATABASE_ID,
-                MEMBERS_ID,
-                ID.unique(),
-                {
+            await prisma.member.create({
+                data: {
                     workspaceId,
-                    userId: user.$id,
+                    userId: user.id,
                     role: MemberRole.MEMBER
                 }
-            )
+            })
             
 
             return c.json({ data: workspace })
@@ -322,16 +309,14 @@ const app = new Hono()
  // get project analytics
  .get(
     "/:workspaceId/analytics",
-    sessionMiddleware,
+    jwtMiddleware,
     async (c) => {
         const user = c.get("user")
-        const databases = c.get("databases")
         const { workspaceId } = c.req.param()
 
         const member = await getMember({
-            databases,
             workspaceId,
-            userId: user.$id
+            userId: user.id
         })
 
         if (!member) {
@@ -345,134 +330,138 @@ const app = new Hono()
         const lastMonthEnd = endOfMonth(subMonths(now, 1))
         
         // tasks total analytics
-        const thisMonthTasks = await databases.listDocuments(
-            DATABASE_ID,
-            TASKS_ID,
-            [
-                Query.equal("workspaceId", workspaceId),
-                Query.greaterThan("$createdAt", thisMonthStart.toISOString()),
-                Query.lessThanEqual("$createdAt", thisMonthEnd.toISOString())
-            ]
-        )
+        const thisMonthTasks = await prisma.task.findMany({
+            where: {
+                workspaceId,
+                createdAt: {
+                    gte: thisMonthStart,
+                    lte: thisMonthEnd
+                }
+            }
+        })
 
-        const lastMonthTasks = await databases.listDocuments(
-            DATABASE_ID,
-            TASKS_ID,
-            [
-                Query.equal("workspaceId", workspaceId),
-                Query.greaterThan("$createdAt", lastMonthStart.toISOString()),
-                Query.lessThanEqual("$createdAt", lastMonthEnd.toISOString())
-            ]
-        )
+        const lastMonthTasks = await prisma.task.findMany({
+            where: {
+                workspaceId,
+                createdAt: {
+                    gte: lastMonthStart,
+                    lte: lastMonthEnd
+                }
+            }
+        })
 
-        const taskCount = thisMonthTasks.total 
-        const taskDifference = taskCount - lastMonthTasks.total
+        const taskCount = thisMonthTasks.length
+        const taskDifference = taskCount - lastMonthTasks.length
 
         // tasks assigned analytics
-        const thisMonthAssignedTasks = await databases.listDocuments(
-            DATABASE_ID,
-            TASKS_ID,
-            [
-                Query.equal("workspaceId", workspaceId),
-                Query.equal("assigneeId", user.$id),
-                Query.greaterThan("$createdAt", thisMonthStart.toISOString()),
-                Query.lessThanEqual("$createdAt", thisMonthEnd.toISOString())
-            ]
-        )
+        const thisMonthAssignedTasks = await prisma.task.findMany({
+            where: {
+                workspaceId,
+                assigneeId: user.id,
+                createdAt: {
+                    gte: thisMonthStart,
+                    lte: thisMonthEnd
+                }
+            }
+        })
 
-        const lastMonthAssignedTasks = await databases.listDocuments(
-            DATABASE_ID,
-            TASKS_ID,
-            [
-                Query.equal("workspaceId", workspaceId),
-                Query.equal("assigneeId", user.$id),
-                Query.greaterThan("$createdAt", lastMonthStart.toISOString()),
-                Query.lessThanEqual("$createdAt", lastMonthEnd.toISOString())
-            ]
-        )
+        const lastMonthAssignedTasks = await prisma.task.findMany({
+            where: {
+                workspaceId,
+                assigneeId: user.id,
+                createdAt: {
+                    gte: lastMonthStart,
+                    lte: lastMonthEnd
+                }
+            }
+        })
 
-        const assignedTaskCount = thisMonthAssignedTasks.total
-        const assignedTaskDifference = assignedTaskCount - lastMonthAssignedTasks.total
+        const assignedTaskCount = thisMonthAssignedTasks.length
+        const assignedTaskDifference = assignedTaskCount - lastMonthAssignedTasks.length
 
         // incomplete tasks analytics
-        const thisMonthIncompleteTasks = await databases.listDocuments(
-            DATABASE_ID,
-            TASKS_ID,
-            [
-                Query.equal("workspaceId", workspaceId),
-                Query.notEqual("status", TaskStatus.DONE),
-                Query.greaterThan("$createdAt", thisMonthStart.toISOString()),
-                Query.lessThanEqual("$createdAt", thisMonthEnd.toISOString())
-            ]
-        )
+        const thisMonthIncompleteTasks = await prisma.task.findMany({
+            where: {
+                workspaceId,
+                status: {
+                    not: TaskStatus.DONE
+                },
+                createdAt: {
+                    gte: thisMonthStart,
+                    lte: thisMonthEnd
+                }
+            }
+        })
 
-        const lastMonthIncompleteTasks = await databases.listDocuments(
-            DATABASE_ID,
-            TASKS_ID,
-            [
-                Query.equal("workspaceId", workspaceId),
-                Query.notEqual("status", TaskStatus.DONE),
-                Query.greaterThan("$createdAt", lastMonthStart.toISOString()),
-                Query.lessThanEqual("$createdAt", lastMonthEnd.toISOString())
-            ]
-        )
+        const lastMonthIncompleteTasks = await prisma.task.findMany({
+            where: {
+                workspaceId,
+                status: {
+                    not: TaskStatus.DONE
+                },
+                createdAt: {
+                    gte: lastMonthStart,
+                    lte: lastMonthEnd
+                }
+            }
+        })
 
-        const incompleteTaskCount = thisMonthIncompleteTasks.total
-        const incompleteTaskDifference = incompleteTaskCount - lastMonthIncompleteTasks.total
+        const incompleteTaskCount = thisMonthIncompleteTasks.length
+        const incompleteTaskDifference = incompleteTaskCount - lastMonthIncompleteTasks.length
 
         // completed tasks analytics
-        const thisMonthCompletedTasks = await databases.listDocuments(
-            DATABASE_ID,
-            TASKS_ID,
-            [
-                Query.equal("workspaceId", workspaceId),
-                Query.equal("status", TaskStatus.DONE),
-                Query.greaterThan("$createdAt", thisMonthStart.toISOString()),
-                Query.lessThanEqual("$createdAt", thisMonthEnd.toISOString())
-            ]
-        )
+        const thisMonthCompletedTasks = await prisma.task.findMany({
+            where: {
+                workspaceId,
+                status: TaskStatus.DONE,
+                createdAt: {
+                    gte: thisMonthStart,
+                    lte: thisMonthEnd
+                }
+            }
+        })
 
-        const lastMonthCompletedTasks = await databases.listDocuments(
-            DATABASE_ID,
-            TASKS_ID,
-            [
-                Query.equal("workspaceId", workspaceId),
-                Query.equal("status", TaskStatus.DONE),
-                Query.greaterThan("$createdAt", lastMonthStart.toISOString()),
-                Query.lessThanEqual("$createdAt", lastMonthEnd.toISOString())
-            ]
-        )
-        
-        const completedTaskCount = thisMonthCompletedTasks.total
-        const completedTaskDifference = completedTaskCount - lastMonthCompletedTasks.total
+        const lastMonthCompletedTasks = await prisma.task.findMany({
+            where: {
+                workspaceId,
+                status: TaskStatus.DONE,
+                createdAt: {
+                    gte: lastMonthStart,
+                    lte: lastMonthEnd
+                }
+            }
+        })
+
+        const completedTaskCount = thisMonthCompletedTasks.length
+        const completedTaskDifference = completedTaskCount - lastMonthCompletedTasks.length
         
         // overdue tasks analytics
-        const thisMonthOverdueTasks = await databases.listDocuments(
-            DATABASE_ID,
-            TASKS_ID,
-            [
-                Query.equal("workspaceId", workspaceId),
-                Query.notEqual("status", TaskStatus.DONE),
-                Query.lessThan("dueDate", now.toISOString()),
-                Query.greaterThan("dueDate", thisMonthStart.toISOString()),
-                Query.lessThanEqual("dueDate", thisMonthEnd.toISOString())
-            ]
-        )
+        const thisMonthOverdueTasks = await prisma.task.findMany({
+            where: {
+                workspaceId,
+                status: {
+                    not: TaskStatus.DONE
+                },
+                dueDate: {
+                    lt: now
+                }
+            }
+        })
 
-        const lastMonthOverdueTasks = await databases.listDocuments(
-            DATABASE_ID,
-            TASKS_ID,
-            [
-                Query.equal("workspaceId", workspaceId),
-                Query.notEqual("status", TaskStatus.DONE),
-                Query.lessThan("dueDate", now.toISOString()),
-                Query.greaterThan("dueDate", lastMonthStart.toISOString()),
-                Query.lessThanEqual("dueDate", lastMonthEnd.toISOString())
-            ]
-        )
+        const lastMonthOverdueTasks = await prisma.task.findMany({
+            where: {
+                workspaceId,
+                status: {
+                    not: TaskStatus.DONE
+                },
+                dueDate: {
+                    lt: now
+                }
+            }
+        })
 
-        const overdueTaskCount = thisMonthOverdueTasks.total
-        const overdueTaskDifference = overdueTaskCount - lastMonthOverdueTasks.total
+        const overdueTaskCount = thisMonthOverdueTasks.length
+        const overdueTaskDifference = overdueTaskCount - lastMonthOverdueTasks.length
 
         return c.json({
             data: {

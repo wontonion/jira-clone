@@ -22,7 +22,7 @@ import { ArrowLeftIcon, ImageIcon } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { Project } from "../types";
+import { Project } from "@prisma/client";
 import { useConfirm } from "@/hooks/use-confirm";
 import { useUpdateProject } from "../api/use-update-project";
 import { useDeleteProject } from "../api/use-delete-project";
@@ -67,7 +67,7 @@ export const EditProjectForm = ({
     mutate(
       {
         form: finalValues,
-        param: { projectId: initialValues.$id },
+        param: { projectId: initialValues.id },
       },
     );
   };
@@ -84,7 +84,7 @@ export const EditProjectForm = ({
     if (!ok) return;
     deleteProject(
       {
-        param: { projectId: initialValues.$id },
+        param: { projectId: initialValues.id },
       },
       {
         onSuccess: () => {
@@ -101,7 +101,7 @@ export const EditProjectForm = ({
       {/* Edit Workspace */}
       <Card className="w-full h-full border-none shadow-none">
         <CardHeader className="flex flex-row items-center gap-x-4 p-7 space-y-0">
-          <Button size="sm" variant="secondary" onClick={() => router.push(`/workspaces/${initialValues.workspaceId}/projects/${initialValues.$id}`)}>
+          <Button size="sm" variant="secondary" onClick={() => router.push(`/workspaces/${initialValues.workspaceId}/projects/${initialValues.id}`)}>
             <ArrowLeftIcon className="size-4" />
             Back
           </Button>

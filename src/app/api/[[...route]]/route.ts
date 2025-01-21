@@ -5,11 +5,13 @@ import workspaces from "@/features/workspaces/server/route"
 import members from "@/features/members/server/route"
 import projects from "@/features/projects/server/route"
 import tasks from "@/features/tasks/server/route"
+import { prettyJSON } from "hono/pretty-json"
 
 const app = new Hono().basePath("/api");
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const routes = app
+    .use(prettyJSON())
     .route("/auth", auth)
     .route("/workspaces", workspaces)
     .route("/members", members)

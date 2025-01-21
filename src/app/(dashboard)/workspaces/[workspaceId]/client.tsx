@@ -8,14 +8,14 @@ import { Card, CardContent } from "@/components/ui/card"
 import { DottedSeparator } from "@/components/ui/dotted-seperator"
 import { useGetMembers } from "@/features/members/api/use-get-members"
 import { MemberAvatar } from "@/features/members/components/member-avatar"
-import { Member } from "@/features/members/types"
 import { useGetProjects } from "@/features/projects/api/use-get-projects"
 import { ProjectAvatar } from "@/features/projects/components/project-avatar"
 import { useCreateProjectModal } from "@/features/projects/hooks/use-create-project-modal"
-import { Project } from "@/features/projects/types"
+import { Project } from "@prisma/client"
+import { PopulatedMember, PopulatedTask } from "@/features/tasks/types"
+
 import { useGetTasks } from "@/features/tasks/api/use-get-tasks"
 import { useCreateTaskModal } from "@/features/tasks/hooks/use-create-task-modal"
-import { Task } from "@/features/tasks/types"
 import { useGetWorkspaceAnalytics } from "@/features/workspaces/api/use-get-workspace-analytics"
 import { useWorkspaceId } from "@/features/workspaces/hooks/use-workspace-id"
 import { formatDistanceToNow } from "date-fns"
@@ -35,22 +35,38 @@ export const WorkspaceIdClient = () => {
     if (isLoading) { return <PageLoader /> }
     if (!analytics || !tasks || !projects || !members) { return <PageError message="Failed to fetch workspace data" /> }
 
+    const formattedProjects = projects.map((project) => ({
+        ...project,
+        createdAt: new Date(project.createdAt),
+        updatedAt: new Date(project.updatedAt),
+    }))
+
+    const formattedMembers = members.map((member) => ({
+        ...member,
+        createdAt: new Date(member.createdAt),
+        updatedAt: new Date(member.updatedAt),
+        user: {
+            ...member.user,
+            createdAt: new Date(member.user.createdAt),
+            updatedAt: new Date(member.user.updatedAt),
+        }
+    }))
 
 
     return (
         <div className="h-full flex flex-col space-y-4">
             <AnalyticsArea data={analytics} />
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                <TaskList data={tasks.documents} total={tasks.documents.length} />
-                <ProjectList data={projects.documents} total={projects.documents.length} />
-                <MemberList data={members.documents} total={members.documents.length} />
+                <TaskList data={tasks as PopulatedTask[]} total={tasks.length} />
+                <ProjectList data={formattedProjects} total={projects.length} />
+                <MemberList data={formattedMembers} total={members.length} />
             </div>
         </div>
     )
 }
 
 interface TaskListProps {
-    data: Task[]
+    data: PopulatedTask[]
     total: number
 }
 
@@ -152,7 +168,7 @@ const ProjectList = ({ data, total }: ProjectListProps) => {
                                                     className="size-12"
                                                     fallbackClassName="text-lg"
                                                     name={project.name}
-                                                    image={project.imageUrl}
+                                                    image={project.imageUrl ?? undefined}
                                                 />
                                                 <p className="text-lg font-medium truncate">{ project.name}</p>
                                             </div>
@@ -171,7 +187,7 @@ const ProjectList = ({ data, total }: ProjectListProps) => {
 }
 
 interface MemberListProps {
-    data: Member[]
+    data: PopulatedMember[]
     total: number
 }
 
@@ -204,13 +220,13 @@ const MemberList = ({ data, total }: MemberListProps) => {
                                     <CardContent className="p-4 flex flex-col items-center gap-x-2">
                                         <MemberAvatar 
                                             className="size-12"
-                                            name={member.name}
+                                            name={member.user.name}
                                         />
                                         <p className="text-lg font-medium truncate">
-                                            {member.name}
+                                            {member.user.name}
                                         </p>
                                         <p className="text-sm text-muted-foreground">
-                                            {member.email}
+                                            {member.user.email}
                                         </p>
                                         </CardContent>
                                     </Card>

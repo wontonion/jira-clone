@@ -34,13 +34,13 @@ export const MembersList = () => {
                 <DottedSeparator />
             </div>
             <CardContent className="p-7">
-                {data?.documents.map((member, index) => (
-                    <Fragment key={member.$id}>
+                {data?.map((member, index) => (
+                    <Fragment key={member.id}>
                         <div className="flex items-center gap-2">
                             <MemberAvatar
                                 className="size-10"
                                 fallbackClassName="text-lg"
-                                name={member.name} />
+                                name={member.name || ""} />
                         <div className="flex flex-col">
                             <p className="text-sm font-medium">{member.name}</p>
                             <p className="text-sm text-muted-foreground">{member.email}</p>
@@ -63,7 +63,7 @@ export const MembersList = () => {
                                 </DropdownMenuContent>
                             </DropdownMenu>
                         </div>
-                        {index < data.documents.length - 1 && (
+                        {index < data.length - 1 && (
                             <Separator className="my-4" />
                         )}
                     </Fragment>

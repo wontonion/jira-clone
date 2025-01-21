@@ -1,5 +1,5 @@
 import { snakeCaseToTitleCase } from "@/lib/utils";
-import { TaskStatus } from "../types";
+import { TaskStatus } from "@prisma/client";
 import { CircleCheckIcon, CircleDashedIcon, CircleDotDashedIcon, CircleDotIcon, CircleIcon, PlusIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCreateTaskModal } from "../hooks/use-create-task-modal";

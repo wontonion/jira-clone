@@ -1,35 +1,16 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
-
 import { registerSchema, loginSchema } from "../schemas";
-import { createAdminClient } from "@/lib/appwrite";
-import { ID } from "node-appwrite";
 import {deleteCookie, setCookie} from "hono/cookie"
-import { AUTH_COOKIE } from "../constants";
-import { sessionMiddleware } from "@/lib/session-middleware";
 import bcrypt from "bcryptjs"
 import { prisma } from "@/lib/prisma-db";
-import { SessionData } from "hono-sessions";
-import { sessionMiddleware as honoSessionMiddleware } from "hono-sessions";
-import { PrismaSessionStore, PrismaSessionData } from "../queries";
+import jwt from 'jsonwebtoken'
+import { JWT_AUTH } from "../constants";
+import { jwtMiddleware } from "@/lib/jwt-middleware";
 
 
 
-const app = new Hono<{
-  Variables: {
-    session: PrismaSessionData
-  }
-}>()
-.use(honoSessionMiddleware({
-  store: new PrismaSessionStore(),
-  encryptionKey: "password_at_least_32_characters_long",
-    cookieOptions: {
-      path: "/",
-      httpOnly: true,
-      secure: true,
-      maxAge: 60 * 60 * 24 * 7,
-    }
-  }))
+const app = new Hono()
   .post(
   "/register",
   zValidator("json", registerSchema),
@@ -56,23 +37,18 @@ const app = new Hono<{
         password: hashedPassword
       }
     })
+    
+    const jwtToken = jwt.sign(
+      {
+        id: newUser.id,
+        exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24  // 1 day
+      },
+      process.env.JWT_SECRET!
+    )
 
-    // get session from context 
-    const session: PrismaSessionData = c.get("session")
-    session.set("user", {
-      id: newUser.id,
-      email: newUser.email,
-      name: newUser.name
-    })
-    
-    
-    // setCookie(c, AUTH_COOKIE, JSON.stringify(session), {
-    //   path: "/",
-    //   httpOnly: true,
-    //   secure: true,
-    //   sameSite: "strict",
-    //   maxAge: 60 * 60 * 24 * 7,
-    // })
+    console.log(process.env.JWT_SECRET)
+
+    setCookie(c, JWT_AUTH, jwtToken)
     
     return c.json({
       success: true,
@@ -82,52 +58,52 @@ const app = new Hono<{
         name: newUser.name
       }
       });
-  })
+    })
+  
   .post(
     "/login",
     zValidator("json", loginSchema),
     async (c) => {
       const { email, password } = c.req.valid("json");
       
-      const { account } = await createAdminClient();
-      const session = await account.createEmailPasswordSession(email, password);
-      // const user = await prisma.user.findUnique({
-      //   where: {email}
-      // })
-      
-      // if (!user) {
-      //   return c.json({ error: 'Unauthorized: User not found' }, 401)
-      // }
-      
-      // check password
-      // const isPasswordValid = await bcrypt.compare(password, user.password)
-      
-      
-      
-      setCookie(c, AUTH_COOKIE, session.secret, {
-        path: "/",
-        httpOnly: true,
-        secure: true,
-        sameSite: "strict",
-        maxAge: 60 * 60 * 24 * 7,
+      const user = await prisma.user.findUnique({
+        where: {email}
       })
-      return c.json({ success: true });
+
+      if (!user) {
+        return c.json({ error: 'User not found' }, 400)
+      }
+
+      const isPasswordValid = await bcrypt.compare(password, user.password)
+
+      if (!isPasswordValid) {
+        return c.json({ error: 'Invalid password' }, 400)
+      }
+
+      const jwtToken = jwt.sign(
+        {
+          id: user.id,
+          exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24  // 1 day
+        },
+        process.env.JWT_SECRET!
+      )
       
+      setCookie(c, JWT_AUTH, jwtToken)
+      
+      return c.json({ success: true });
     }
   )
   .get("/current", 
-    sessionMiddleware,
+    jwtMiddleware,
     async (c) => {
       const user = c.get("user");
 
       return c.json({ data: user });
     }
   )
-  .post("/logout", sessionMiddleware,async (c) => {
-    const  account  = c.get("account");
+  .post("/logout", jwtMiddleware,async (c) => {
 
-    deleteCookie(c, AUTH_COOKIE);
-    await account.deleteSession("current");
+    deleteCookie(c, JWT_AUTH);
 
     return c.json({ success: true });
   })

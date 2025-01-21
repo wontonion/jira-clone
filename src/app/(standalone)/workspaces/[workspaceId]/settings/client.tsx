@@ -13,10 +13,14 @@ const WorkspaceIdSettingsClient = () => {
   if (isLoading) return <PageLoader />
   if (!data) return <PageError message="Workspace not found" />
 
-    
+  const formattedData = {
+    ...data,
+    createdAt: new Date(data.createdAt),
+    updatedAt: new Date(data.updatedAt),
+  }
   return (
     <div className="w-full lg:max-w-2xl">
-      <EditWorkspaceForm initialValues={data} />
+      <EditWorkspaceForm initialValues={formattedData} />
     </div>
   );
 };

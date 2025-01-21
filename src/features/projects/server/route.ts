@@ -1,50 +1,46 @@
-import { DATABASE_ID, IMAGES_BUCKET_ID, PROJECTS_ID, TASKS_ID } from "@/config";
 import { getMember } from "@/features/members/utils";
-import { sessionMiddleware } from "@/lib/session-middleware";
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
-import { ID, Query } from "node-appwrite";
 import { z } from "zod";
 import { createProjectSchema, updateProjectSchema } from "../schemas";
-import { Project } from "../types";
 import { endOfMonth, startOfMonth, subMonths } from "date-fns";
-import { TaskStatus } from "@/features/tasks/types";
+import { TaskStatus } from "@prisma/client";
+import { jwtMiddleware } from "@/lib/jwt-middleware";
+import { prisma } from "@/lib/prisma-db";
 
 const app = new Hono()
     // get projects
     .get(
         "/",
-        sessionMiddleware,
+        jwtMiddleware,
         zValidator("query", z.object({
-            workspaceId: z.string()
+            workspaceId: z.string().min(1, "Workspace ID is required")
         })),
         async (c) => {
             const user = c.get("user")
-            const databases = c.get("databases")
             
             const { workspaceId } = c.req.valid("query")
-            if (!workspaceId) {
-                return c.json({ error: "Workspace ID is required" }, 400)
-            }
 
             const member = await getMember({
-                databases,
                 workspaceId,
-                userId: user.$id
+                userId: user.id
             })
 
             if (!member) {
                 return c.json({ error: "Unauthorized" }, 401)
             }
 
-            const projects = await databases.listDocuments<Project>(
-                DATABASE_ID,
-                PROJECTS_ID,
-                [
-                    Query.equal("workspaceId", workspaceId),
-                    Query.orderAsc("$createdAt")
-                ]
-            )
+            const projects = await prisma.project.findMany({
+                where: {
+                    workspaceId,
+                },
+                include: {
+                    tasks: true
+                },
+                orderBy: {
+                    createdAt: "asc"
+                }
+            })
 
             return c.json({ data: projects })
         }
@@ -53,26 +49,31 @@ const app = new Hono()
     // get single project
     .get(
         "/:projectId",
-        sessionMiddleware,
+        jwtMiddleware,
         async (c) => {
             const user = c.get("user")
-            const databases = c.get("databases")
             const { projectId } = c.req.param()
 
-            const project = await databases.getDocument<Project>(
-                DATABASE_ID,
-                PROJECTS_ID,
-                projectId
-            )
+            const project = await prisma.project.findUnique({
+                where: {
+                    id: projectId
+                },
+                include: {
+                    tasks: true
+                }
+            })
+
+            if (!project) {
+                return c.json({ error: "Getting project failed: Project not found" }, 404)
+            }
 
             const member = await getMember({
-                databases,
                 workspaceId: project.workspaceId,
-                userId: user.$id
+                userId: user.id
             })
 
             if (!member) {
-                return c.json({ error: "Unauthorized" }, 401)
+                return c.json({ error: "Getting project failed: Unauthorized" }, 401)
             }
 
             return c.json({ data: project })
@@ -81,26 +82,28 @@ const app = new Hono()
     // get project analytics
     .get(
         "/:projectId/analytics",
-        sessionMiddleware,
+        jwtMiddleware,
         async (c) => {
             const user = c.get("user")
-            const databases = c.get("databases")
             const { projectId } = c.req.param()
 
-            const project = await databases.getDocument<Project>(
-                DATABASE_ID,
-                PROJECTS_ID,
-                projectId
-            )
+            const project = await prisma.project.findUnique({
+                where: {
+                    id: projectId
+                }
+            })
+
+            if (!project) {
+                return c.json({ error: "Getting project analytics failed: Project not found" }, 404)
+            }
 
             const member = await getMember({
-                databases,
                 workspaceId: project.workspaceId,
-                userId: user.$id
+                userId: user.id
             })
 
             if (!member) {
-                return c.json({ error: "Unauthorized" }, 401)
+                return c.json({ error: "Getting project analytics failed: Unauthorized" }, 401)
             }
 
             const now = new Date()
@@ -110,134 +113,143 @@ const app = new Hono()
             const lastMonthEnd = endOfMonth(subMonths(now, 1))
             
             // tasks total analytics
-            const thisMonthTasks = await databases.listDocuments(
-                DATABASE_ID,
-                TASKS_ID,
-                [
-                    Query.equal("projectId", projectId),
-                    Query.greaterThan("$createdAt", thisMonthStart.toISOString()),
-                    Query.lessThanEqual("$createdAt", thisMonthEnd.toISOString())
-                ]
-            )
+            const thisMonthTasks = await prisma.task.findMany({
+                where: {
+                    projectId,
+                    createdAt: {
+                        gte: thisMonthStart,
+                        lte: thisMonthEnd
+                    }
+                }
+            })
 
-            const lastMonthTasks = await databases.listDocuments(
-                DATABASE_ID,
-                TASKS_ID,
-                [
-                    Query.equal("projectId", projectId),
-                    Query.greaterThan("$createdAt", lastMonthStart.toISOString()),
-                    Query.lessThanEqual("$createdAt", lastMonthEnd.toISOString())
-                ]
-            )
 
-            const taskCount = thisMonthTasks.total 
-            const taskDifference = taskCount - lastMonthTasks.total
+            const lastMonthTasks = await prisma.task.findMany({
+                where: {
+                    projectId,
+                    createdAt: {
+                        gte: lastMonthStart,
+                        lte: lastMonthEnd
+                    }
+                }
+            })
+
+            const taskCount = thisMonthTasks.length 
+            const taskDifference = taskCount - lastMonthTasks.length
 
             // tasks assigned analytics
-            const thisMonthAssignedTasks = await databases.listDocuments(
-                DATABASE_ID,
-                TASKS_ID,
-                [
-                    Query.equal("projectId", projectId),
-                    Query.equal("assigneeId", user.$id),
-                    Query.greaterThan("$createdAt", thisMonthStart.toISOString()),
-                    Query.lessThanEqual("$createdAt", thisMonthEnd.toISOString())
-                ]
-            )
+            const thisMonthAssignedTasks = await prisma.task.findMany({
+                where: {
+                    projectId,
+                    assigneeId: user.id,
+                    createdAt: {
+                        gte: thisMonthStart,
+                        lte: thisMonthEnd
+                    }
+                }
+            })
 
-            const lastMonthAssignedTasks = await databases.listDocuments(
-                DATABASE_ID,
-                TASKS_ID,
-                [
-                    Query.equal("projectId", projectId),
-                    Query.equal("assigneeId", user.$id),
-                    Query.greaterThan("$createdAt", lastMonthStart.toISOString()),
-                    Query.lessThanEqual("$createdAt", lastMonthEnd.toISOString())
-                ]
-            )
+            const lastMonthAssignedTasks = await prisma.task.findMany({
+                where: {
+                    projectId,
+                    assigneeId: user.id,
+                    createdAt: {
+                        gte: lastMonthStart,
+                        lte: lastMonthEnd
+                    }
+                }
+            })
 
-            const assignedTaskCount = thisMonthAssignedTasks.total
-            const assignedTaskDifference = assignedTaskCount - lastMonthAssignedTasks.total
+            const assignedTaskCount = thisMonthAssignedTasks.length
+            const assignedTaskDifference = assignedTaskCount - lastMonthAssignedTasks.length
 
             // incomplete tasks analytics
-            const thisMonthIncompleteTasks = await databases.listDocuments(
-                DATABASE_ID,
-                TASKS_ID,
-                [
-                    Query.equal("projectId", projectId),
-                    Query.notEqual("status", TaskStatus.DONE),
-                    Query.greaterThan("$createdAt", thisMonthStart.toISOString()),
-                    Query.lessThanEqual("$createdAt", thisMonthEnd.toISOString())
-                ]
-            )
+            const thisMonthIncompleteTasks = await prisma.task.findMany({
+                where: {
+                    projectId,
+                    status: {
+                        not: TaskStatus.DONE
+                    },
+                    createdAt: {
+                        gte: thisMonthStart,
+                        lte: thisMonthEnd
+                    }
+                }
+            })
 
-            const lastMonthIncompleteTasks = await databases.listDocuments(
-                DATABASE_ID,
-                TASKS_ID,
-                [
-                    Query.equal("projectId", projectId),
-                    Query.notEqual("status", TaskStatus.DONE),
-                    Query.greaterThan("$createdAt", lastMonthStart.toISOString()),
-                    Query.lessThanEqual("$createdAt", lastMonthEnd.toISOString())
-                ]
-            )
+            const lastMonthIncompleteTasks = await prisma.task.findMany({
+                where: {
+                    projectId,
+                    status: {
+                        not: TaskStatus.DONE
+                    },
+                    createdAt: {
+                        gte: lastMonthStart,
+                        lte: lastMonthEnd
+                    }
+                }
+            })
 
-            const incompleteTaskCount = thisMonthIncompleteTasks.total
-            const incompleteTaskDifference = incompleteTaskCount - lastMonthIncompleteTasks.total
+            const incompleteTaskCount = thisMonthIncompleteTasks.length
+            const incompleteTaskDifference = incompleteTaskCount - lastMonthIncompleteTasks.length
 
             // completed tasks analytics
-            const thisMonthCompletedTasks = await databases.listDocuments(
-                DATABASE_ID,
-                TASKS_ID,
-                [
-                    Query.equal("projectId", projectId),
-                    Query.equal("status", TaskStatus.DONE),
-                    Query.greaterThan("$createdAt", thisMonthStart.toISOString()),
-                    Query.lessThanEqual("$createdAt", thisMonthEnd.toISOString())
-                ]
-            )
+            const thisMonthCompletedTasks = await prisma.task.findMany({
+                where: {
+                    projectId,
+                    status: TaskStatus.DONE,
+                    createdAt: {
+                        gte: thisMonthStart,
+                        lte: thisMonthEnd
+                    }
+                }
+            })
 
-            const lastMonthCompletedTasks = await databases.listDocuments(
-                DATABASE_ID,
-                TASKS_ID,
-                [
-                    Query.equal("projectId", projectId),
-                    Query.equal("status", TaskStatus.DONE),
-                    Query.greaterThan("$createdAt", lastMonthStart.toISOString()),
-                    Query.lessThanEqual("$createdAt", lastMonthEnd.toISOString())
-                ]
-            )
-            
-            const completedTaskCount = thisMonthCompletedTasks.total
-            const completedTaskDifference = completedTaskCount - lastMonthCompletedTasks.total
+            const lastMonthCompletedTasks = await prisma.task.findMany({
+                where: {
+                    projectId,
+                    status: TaskStatus.DONE,
+                    createdAt: {
+                        gte: lastMonthStart,
+                        lte: lastMonthEnd
+                    }
+                }
+            })
+
+            const completedTaskCount = thisMonthCompletedTasks.length
+            const completedTaskDifference = completedTaskCount - lastMonthCompletedTasks.length
             
             // overdue tasks analytics
-            const thisMonthOverdueTasks = await databases.listDocuments(
-                DATABASE_ID,
-                TASKS_ID,
-                [
-                    Query.equal("projectId", projectId),
-                    Query.notEqual("status", TaskStatus.DONE),
-                    Query.lessThan("dueDate", now.toISOString()),
-                    Query.greaterThan("dueDate", thisMonthStart.toISOString()),
-                    Query.lessThanEqual("dueDate", thisMonthEnd.toISOString())
-                ]
-            )
+            const thisMonthOverdueTasks = await prisma.task.findMany({
+                where: {
+                    projectId,
+                    status: {
+                        not: TaskStatus.DONE
+                    },
+                    dueDate: {
+                        lt: now,
+                        gte: thisMonthStart,
+                        lte: thisMonthEnd
+                    }
+                }
+            })
 
-            const lastMonthOverdueTasks = await databases.listDocuments(
-                DATABASE_ID,
-                TASKS_ID,
-                [
-                    Query.equal("projectId", projectId),
-                    Query.notEqual("status", TaskStatus.DONE),
-                    Query.lessThan("dueDate", now.toISOString()),
-                    Query.greaterThan("dueDate", lastMonthStart.toISOString()),
-                    Query.lessThanEqual("dueDate", lastMonthEnd.toISOString())
-                ]
-            )
+            const lastMonthOverdueTasks = await prisma.task.findMany({
+                where: {
+                    projectId,
+                    status: {
+                        not: TaskStatus.DONE
+                    },
+                    dueDate: {
+                        lt: now,
+                        gte: lastMonthStart,
+                        lte: lastMonthEnd
+                    }
+                }
+            })
 
-            const overdueTaskCount = thisMonthOverdueTasks.total
-            const overdueTaskDifference = overdueTaskCount - lastMonthOverdueTasks.total
+            const overdueTaskCount = thisMonthOverdueTasks.length
+            const overdueTaskDifference = overdueTaskCount - lastMonthOverdueTasks.length
 
             // console.log(thisMonthOverdueTasks)
             return c.json({
@@ -259,19 +271,16 @@ const app = new Hono()
     .post(
     
     "/",
-    sessionMiddleware,
+    jwtMiddleware,
     zValidator("form", createProjectSchema),
     async (c) => {
-        const databases = c.get("databases")
-        const storage = c.get("storage")
         const user = c.get("user")
         
         const { workspaceId, name, image } = c.req.valid("form")
 
         const member = await getMember({
-            databases,
             workspaceId,
-            userId: user.$id
+            userId: user.id
         })
 
         if (!member) {
@@ -284,31 +293,20 @@ const app = new Hono()
 
         if (image && typeof image === 'object' && 'name' in image && 'size' in image) {
         // if (image instanceof File) { 
-            const file = await storage.createFile(
-                IMAGES_BUCKET_ID,
-                ID.unique(),
-                image,
-            )
-            
-            const arrayBuffer = await storage.getFilePreview(
-                IMAGES_BUCKET_ID,
-                file.$id
-            )
-            
-            uploadedImageUrl = `data:image/png;base64,${Buffer.from(arrayBuffer).toString("base64")}`
+            const arrayBuffer = await image.arrayBuffer()
+            const buffer = Buffer.from(arrayBuffer)
+            uploadedImageUrl = `data:${image.type};base64,${buffer.toString('base64')}`
+
         }
         
         // 2. make up new workspace
-        const project = await databases.createDocument(
-            DATABASE_ID,
-            PROJECTS_ID,
-            ID.unique(),
-            {
+        const project = await prisma.project.create({
+            data: {
                 name,
                 imageUrl: uploadedImageUrl,
                 workspaceId,
             }
-        )
+        })
 
         return c.json({ data: project })
 
@@ -317,30 +315,27 @@ const app = new Hono()
 // update project
 .patch(
     "/:projectId",
-    sessionMiddleware,
+    jwtMiddleware,
     zValidator("form", updateProjectSchema),
     async (c) => { 
-            const databases = c.get("databases")
-            const storage = c.get("storage")
-            const user = c.get("user")
-            
-            const { projectId } = c.req.param()
-            const { name, image } = c.req.valid("form")
-            
-        const existingProject = await databases.getDocument<Project>(
-            DATABASE_ID,
-            PROJECTS_ID,
-            projectId
-        )
+        const user = c.get("user")
+        
+        const { projectId } = c.req.param()
+        const { name, image } = c.req.valid("form")
+        
+        const existingProject = await prisma.project.findUnique({
+            where: {
+                id: projectId
+            }
+        })
 
         if (!existingProject) {
             return c.json({ error: "Project not found" }, 404)
         }
 
         const member = await getMember({
-            databases,
             workspaceId: existingProject.workspaceId,
-            userId: user.$id
+            userId: user.id
         })
 
         if (!member) {
@@ -350,55 +345,48 @@ const app = new Hono()
         // logic for updating project
         // 1. update image
         let uploadedImageUrl: string | undefined
-
+        
+        // if it is file, change it to base64
         if (image && typeof image === 'object' && 'name' in image && 'size' in image) {
-        // if (image instanceof File) { 
-            const file = await storage.createFile(
-                IMAGES_BUCKET_ID,
-                ID.unique(),
-                image,
-            )
-            
-            const arrayBuffer = await storage.getFilePreview(
-                IMAGES_BUCKET_ID,
-                file.$id
-            )
-            
-            uploadedImageUrl = `data:image/png;base64,${Buffer.from(arrayBuffer).toString("base64")}`
+            const arrayBuffer = await image.arrayBuffer()
+            const buffer = Buffer.from(arrayBuffer)
+            uploadedImageUrl = `data:${image.type};base64,${buffer.toString('base64')}`
         }
         
         // 2. make up new workspace
-        const project = await databases.updateDocument(
-            DATABASE_ID,
-            PROJECTS_ID,
-            projectId,
-            {
+        const project = await prisma.project.update({
+            where: {
+                id: projectId
+            },
+            data: {
                 name,
                 imageUrl: uploadedImageUrl
             }
-        )
+        })
 
         return c.json({ data: project })
     })
 // delete project
 .delete(
     "/:projectId",
-    sessionMiddleware,
+    jwtMiddleware,
     async (c) => {
-        const databases = c.get("databases")
         const user = c.get("user")
         const { projectId } = c.req.param()
 
-        const existingProject = await databases.getDocument<Project>(
-            DATABASE_ID,
-            PROJECTS_ID,
-            projectId
-        )
+        const existingProject = await prisma.project.findUnique({
+            where: {
+                id: projectId
+            }
+        })
+
+        if (!existingProject) {
+            return c.json({ error: "Project not found" }, 404)
+        }
 
         const member = await getMember({
-            databases,
             workspaceId: existingProject.workspaceId,
-            userId: user.$id
+            userId: user.id
         })
 
         if (!member) {
@@ -407,9 +395,13 @@ const app = new Hono()
         
         // TODO : delete tasks
         
-        await databases.deleteDocument(DATABASE_ID, PROJECTS_ID, existingProject.$id)
+        await prisma.project.delete({
+            where: {
+                id: projectId
+            }
+        })
 
-        return c.json({ data: { $id: existingProject.$id } })
+        return c.json({ data: { id: existingProject.id } })
     }
 )
 

@@ -1,5 +1,5 @@
 import { Calendar, dateFnsLocalizer } from "react-big-calendar";
-import { Task } from "../types";
+import { TaskStatus } from "@prisma/client";
 import { enUS } from "date-fns/locale";
 import { addMonths, format, getDay, parse, startOfWeek, subMonths } from "date-fns";
 import { useState } from "react";
@@ -8,6 +8,7 @@ import "./data-calendar.css"
 import { EventCard } from "./event-card";
 import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PopulatedTask } from "../types";
 
 const locales = {
     "en-US": enUS,
@@ -21,7 +22,7 @@ const localizer = dateFnsLocalizer({
     locales,
 })
 interface DataCalendarProps {
-    data: Task[]
+    data: PopulatedTask[]
 }
 interface CustomToolbarProps{
     date: Date
@@ -56,17 +57,17 @@ const CustomToolbar = ({ date, onNavigate }: CustomToolbarProps) => {
 export const DataCalendar = ({ data }: DataCalendarProps) => {
 
     const [value, setValue] = useState(
-        data.length > 0 ? new Date(data[0].dueDate) : new Date()
+        data.length > 0 ? new Date(data[0].dueDate ?? "") : new Date()
     )
     
     const events = data.map((task) => ({
-        start: new Date(task.dueDate),
-        end: new Date(task.dueDate),
+        start: new Date(task.dueDate ?? ""),
+        end: new Date(task.dueDate ?? ""),
         title: task.name,
         project: task.project,
         assignee: task.assignee,
-        status: task.status,
-        id: task.$id
+        status: task.status as TaskStatus,
+        id: task.id
     }))
 
     const handleNavigate = (action: "PREV" | "NEXT" | "TODAY") => {

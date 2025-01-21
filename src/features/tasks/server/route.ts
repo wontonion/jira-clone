@@ -1,23 +1,19 @@
-import { sessionMiddleware } from "@/lib/session-middleware"
 import { zValidator } from "@hono/zod-validator"
 import { Hono } from "hono"
 import { createTaskSchema } from "../schemas"
 import { getMember } from "@/features/members/utils"
-import { DATABASE_ID, MEMBERS_ID, PROJECTS_ID, TASKS_ID } from "@/config"
-import { ID, Query } from "node-appwrite"
 import { z } from "zod"
-import { Task, TaskStatus } from "../types"
-import { createAdminClient } from "@/lib/appwrite"
-import { Project } from "@/features/projects/types"
+import { TaskStatus } from "@prisma/client"
+import { jwtMiddleware } from "@/lib/jwt-middleware"
+import { prisma } from "@/lib/prisma-db"
 
 const app = new Hono()
    .post(
       "/",
-      sessionMiddleware,
+      jwtMiddleware,
       zValidator("json", createTaskSchema),
       async (c) => {
          const user = c.get("user")
-         const databases = c.get("databases")
          const {
             name,
             status,
@@ -28,36 +24,35 @@ const app = new Hono()
          } = c.req.valid("json")
 
          const member = await getMember({
-            databases,
             workspaceId,
-            userId: user.$id
+            userId: user.id
          })
 
          if (!member) {
-            return c.json({ error: "Unauthorized" }, 401)
+            return c.json({ error: "Create task failed, member not found" }, 401)
          }
 
-         const highestPositionTask = await databases.listDocuments(
-            DATABASE_ID,
-            TASKS_ID,
-            [
-               Query.equal("status", status),
-               Query.equal("workspaceId", workspaceId),
-               Query.orderAsc("position"),
-               Query.limit(1)
-            ]
-         )
+         const highestPositionTask = await prisma.task.findMany({
+            where: {
+               status,
+               workspaceId,
+               position: {
+                  gt: 0
+               },
+            },
+            orderBy: {
+               position: "asc"
+            },
+            take: 1
+         })
 
          const newPosition =
-            highestPositionTask.documents.length > 0
-               ? highestPositionTask.documents[0].position + 1
+            highestPositionTask.length > 0
+               ? highestPositionTask[0].position + 1
                : 1000
 
-         const task = await databases.createDocument(
-            DATABASE_ID,
-            TASKS_ID,
-            ID.unique(),
-            {
+         const task = await prisma.task.create({
+            data: {
                name,
                status,
                workspaceId,
@@ -66,14 +61,14 @@ const app = new Hono()
                assigneeId,
                position: newPosition
             }
-         )
+         })
 
          return c.json({ data: task })
       }
    )
    .get(
       "/",
-      sessionMiddleware,
+      jwtMiddleware,
       zValidator("query", z.object({
          workspaceId: z.string(),
          projectId: z.string().nullish(),
@@ -83,88 +78,75 @@ const app = new Hono()
          dueDate: z.string().nullish(),
       })),
       async (c) => {
-         const { users } = await createAdminClient()
          const user = c.get("user")
-         const databases = c.get("databases")
          const { workspaceId, projectId, status, assigneeId, search, dueDate } = c.req.valid("query")
 
          const member = await getMember({
-            databases,
             workspaceId,
-            userId: user.$id
+            userId: user.id
          })
 
          if (!member) {
-            return c.json({ error: "Unathorized" }, 401)
+            return c.json({ error: "Get tasks failed, member not found" }, 401)
          }
 
-         const query = [
-            Query.equal("workspaceId", workspaceId),
-            Query.orderDesc("$createdAt")
-
-         ]
-
-         if (projectId) {
-            console.log("projectId", projectId)
-            query.push(Query.equal("projectId", projectId))
+         const where = {
+            workspaceId,
+            ...(projectId && { projectId }),
+            ...(assigneeId && { assigneeId }),
+            ...(status && { status }),
+            ...(dueDate && { dueDate }),
+            ...(search && {
+               name: {
+                  contains: search,
+               }
+            })
          }
 
-         if (assigneeId) {
-            console.log("assigneeId", assigneeId)
-            query.push(Query.equal("assigneeId", assigneeId))
-         }
+         const tasks = await prisma.task.findMany({
+            where,
+            orderBy: {
+               createdAt: 'desc'
+            }
+         })
 
-         if (status) {
-            console.log("status", status)
-            query.push(Query.equal("status", status))
-         }
+         const projectIds = tasks.map((task) => task.projectId).filter((id): id is string => id !== null)
+         const assigneeIds = tasks.map((task) => task.assigneeId).filter((id): id is string => id !== null)
 
+         const projects = await prisma.project.findMany({
+            where: {
+               id: {
+                  in: projectIds
+               }
+            }
+         })
 
-         if (dueDate) {
-            console.log("dueDate", dueDate)
-            query.push(Query.equal("dueDate", dueDate))
-         }
-
-         if (search) {
-            console.log("search", search)
-            query.push(Query.search("name", search))
-         }
-
-         const tasks = await databases.listDocuments<Task>(
-            DATABASE_ID,
-            TASKS_ID,
-            query
-         )
-         const projectIds = tasks.documents.map((task) => task.projectId)
-         const assigneeIds = tasks.documents.map((task) => task.assigneeId)
-
-         const projects = await databases.listDocuments<Project>(
-            DATABASE_ID,
-            PROJECTS_ID,
-            projectIds.length > 0 ? [Query.contains("$id", projectIds)] : []
-         )
-
-         const members = await databases.listDocuments(
-            DATABASE_ID,
-            MEMBERS_ID,
-            assigneeIds.length > 0 ? [Query.contains("$id", assigneeIds)] : []
-         )
+         const members = await prisma.member.findMany({
+            where: {
+               id: {
+                  in: assigneeIds
+               }
+            }
+         })
 
          const assignees = await Promise.all(
-            members.documents.map(async (member) => {
-               const user = await users.get(member.userId)
+            members.map(async (member) => {
+               const user = await prisma.user.findUnique({
+                  where: {
+                     id: member.userId
+                  }
+               })
                return {
                   ...member,
-                  name: user.name || user.email,
-                  email: user.email,
+                  name: user?.name || user?.email,
+                  email: user?.email,
                }
             })
          )
 
-
-         const populatedTasks = tasks.documents.map((task) => {
-            const project = projects.documents.find((project) => project.$id === task.projectId)
-            const assignee = assignees.find((assignee) => assignee.$id === task.assigneeId)
+         const populatedTasks = tasks.map((task) => {
+            const project = projects.find((project) => project.id === task.projectId)
+            const assignee = assignees.find((assignee) => assignee.id === task.assigneeId)
             return {
                ...task,
                project,
@@ -173,54 +155,52 @@ const app = new Hono()
          })
          
          return c.json({
-            data: {
-               ...tasks,
-               documents: populatedTasks
-            }
+            data: populatedTasks
          })
       })
    .delete(
       "/:taskId",
-      sessionMiddleware,
+      jwtMiddleware,
       async (c) => {
          const user = c.get("user")
-         const databases = c.get("databases")
          const { taskId } = c.req.param()
          
-         const task = await databases.getDocument<Task>(
-            DATABASE_ID,
-            TASKS_ID,
-            taskId
-         )
+         const task = await prisma.task.findUnique({
+            where: {
+               id: taskId
+            }
+         })
+
+         if (!task) {
+            return c.json({ error: "Delete task failed, task not found" }, 404)
+         }
 
          const member = await getMember({
-            databases,
             workspaceId: task.workspaceId,
-            userId: user.$id
+            userId: user.id
          })
 
          if (!member) {
-            return c.json({ error: "Unauthorized" }, 401)
+            return c.json({ error: "Delete task failed, member not found" }, 401)
          }
 
-         await databases.deleteDocument(
-            DATABASE_ID,
-            TASKS_ID,
-            taskId
-         )
+         await prisma.task.delete({
+            where: {
+               id: taskId
+            }
+         })
 
-         return c.json({ data: { $id: taskId } })
+         return c.json({ data: { id: taskId } })
 
 
       }
    )
    .patch(
       "/:taskId",
-      sessionMiddleware,
+      jwtMiddleware,
       zValidator("json", createTaskSchema.partial()),
       async (c) => { 
          const user = c.get("user")
-         const databases = c.get("databases")
          const {
             name,
             status,
@@ -231,30 +211,29 @@ const app = new Hono()
          } = c.req.valid("json")
 
          const { taskId } = c.req.param()
-         const existingTask = await databases.getDocument<Task>(
-            DATABASE_ID,
-            TASKS_ID,
-            taskId
-         )
+         const existingTask = await prisma.task.findUnique({
+            where: {
+               id: taskId
+            }
+         })
 
          if (!existingTask) {
-            return c.json({ error: "Task not found" }, 404)
+            return c.json({ error: "Update task failed, task not found" }, 404)
          }
 
          const member = await getMember({
-            databases,
             workspaceId: existingTask.workspaceId,
-            userId: user.$id
+            userId: user.id
          })
          if (!member) {
             return c.json({ error: "Unauthorized" }, 401)
          }
 
-         const task = await databases.updateDocument<Task>(
-            DATABASE_ID,
-            TASKS_ID,
-            taskId,
-            {
+         const task = await prisma.task.update({
+            where: {
+               id: taskId
+            },
+            data: {
                name,
                status,
                projectId,
@@ -262,67 +241,86 @@ const app = new Hono()
                assigneeId,
                description
             }
-         )
+         })
 
          return c.json({ data: task })
       }
    )
    .get(
       "/:taskId",
-      sessionMiddleware,
+      jwtMiddleware,
       async (c) => {
          const currentUser = c.get("user")
-         const databases = c.get("databases")
-         const {users} = await createAdminClient()
          const { taskId } = c.req.param()
 
-         const task = await databases.getDocument<Task>(
-            DATABASE_ID,
-            TASKS_ID,
-            taskId
-         )
-
-         const currentMember = await getMember({
-            databases,
-            workspaceId: task.workspaceId,
-            userId: currentUser.$id
+         const task = await prisma.task.findUnique({
+            where: {
+               id: taskId
+            }
          })
 
-         if (!currentMember) {
+         if (!task) {
+            return c.json({ error: "Get task failed, task not found" }, 404)
+         }
+
+         const member = await getMember({
+            workspaceId: task.workspaceId,
+            userId: currentUser.id
+         })
+
+         if (!member) {
             return c.json({ error: "Unauthorized" }, 401)
          }
 
-         const project = await databases.getDocument<Project>(
-            DATABASE_ID,
-            PROJECTS_ID,
-            task.projectId
-         )
+         const project = await prisma.project.findUnique({
+            where: {
+               id: task.projectId
+            }
+         })
 
-         const member = await databases.getDocument(
-            DATABASE_ID,
-            MEMBERS_ID,
-            task.assigneeId
-         )
-
-         const user = await users.get(member.userId);
-
-         const assignee = {
-            ...member,
-            name: user.name || user.email,
-            email: user.email,
+         if (!project) {
+            return c.json({ error: "Get task failed, project not found" }, 404)
          }
 
-         return c.json({ data: { ...task, project, assignee } })
+         if (!task.assigneeId) {
+            return c.json({ error: "Get task failed, assignee is not set" }, 404)
+         }
+
+         const assignee = await prisma.member.findUnique({
+            where: {
+               id: task.assigneeId
+            }
+         })
+
+         if (!assignee) {
+            return c.json({ error: "Get task failed, assignee not found" }, 404)
+         }
+
+         const user = await prisma.user.findUnique({
+            where: {
+               id: assignee.userId
+            }
+         })
+         if (!user) {
+            return c.json({ error: "Get task failed, user not found, assigneeId not found" }, 404)
+         }
+
+         const assigneeInfo = {
+            ...assignee,
+            user
+         }
+
+         return c.json({ data: { ...task, project, assignee: assigneeInfo } })
    })
    .post(
       "/bulk-update",
-      sessionMiddleware,
+      jwtMiddleware,
       zValidator(
          "json",
          z.object({
             tasks: z.array(
                z.object({
-                  $id: z.string(),
+                  id: z.string(),
                   status: z.nativeEnum(TaskStatus),
                   position: z.number().int().positive().min(1000).max(1_000_000)
                })
@@ -330,27 +328,26 @@ const app = new Hono()
          })
       ),
       async (c) => {
-         const databases = c.get("databases")
          const user = c.get("user")
          const { tasks } = await c.req.valid("json")
 
-         const tasksToUpdate = await databases.listDocuments<Task>(
-            DATABASE_ID,
-            TASKS_ID,
-            [Query.contains("$id", tasks.map((task) => task.$id))]
-            
-         )
+         const tasksToUpdate = await prisma.task.findMany({
+            where: {
+               id: {
+                  in: tasks.map((task) => task.id)
+               }
+            }
+         })
 
-         const workspaceIds = new Set(tasksToUpdate.documents.map((task) => task.workspaceId))
+         const workspaceIds = new Set(tasksToUpdate.map((task) => task.workspaceId))
 
          if (workspaceIds.size !== 1) {
             return c.json({error: "All tasks must belong to the same workspace"}, 400)
          }
 
          const member = await getMember({
-            databases,
             workspaceId: workspaceIds.values().next().value as string,
-            userId: user.$id
+            userId: user.id
          })
 
          if (!member) {
@@ -359,16 +356,16 @@ const app = new Hono()
 
          const updatedTasks = await Promise.all(
             tasks.map(async (task) => {
-               const { $id, status, position } = task;
-               return databases.updateDocument<Task>(
-                  DATABASE_ID,
-                  TASKS_ID,
-                  $id,
-                  {
+               const { id, status, position } = task;
+               return prisma.task.update({
+                  where: {
+                     id
+                  },
+                  data: {
                      status,
                      position
                   }
-               )
+               })
             })
          )
 

@@ -1,6 +1,4 @@
 import { ProjectAvatar } from "@/features/projects/components/project-avatar";
-import { Project } from "@/features/projects/types";
-import { Task } from "@/features/tasks/types";
 import { useWorkspaceId } from "@/features/workspaces/hooks/use-workspace-id";
 import { ChevronRightIcon, TrashIcon } from "lucide-react";
 import Link from "next/link";
@@ -9,6 +7,8 @@ import { useDeleteTask } from "@/features/tasks/api/use-delete-task";
 import { useConfirm } from "@/hooks/use-confirm";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { Project } from "@prisma/client";
+import { Task } from "@prisma/client";
 
 interface TaskBreadcrumbProps {
     project: Project
@@ -32,7 +32,7 @@ export const TaskBreadcrumb = ({ project, task }: TaskBreadcrumbProps) => {
 
         deleteTask({
             param: {
-                taskId: task.$id
+                taskId: task.id
             }
         }, {
             onSuccess: () => {
@@ -48,7 +48,7 @@ export const TaskBreadcrumb = ({ project, task }: TaskBreadcrumbProps) => {
             <ConfirmDialog />
             <ProjectAvatar 
                 name={project.name}
-                image={project.imageUrl}
+                image={project.imageUrl ?? undefined}
                 className="size-6 lg:size-8"
             />
 

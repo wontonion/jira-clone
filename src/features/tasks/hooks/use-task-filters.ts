@@ -1,5 +1,5 @@
 import { parseAsString, parseAsStringEnum, useQueryStates } from "nuqs"
-import { TaskStatus } from "../types"
+import { TaskStatus } from "@prisma/client"
 
 export const useTaskFilters = () => {
     return useQueryStates({

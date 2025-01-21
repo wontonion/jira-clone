@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { TaskStatus } from "./types";
+import { TaskStatus } from "@prisma/client";
 
 export const createTaskSchema = z.object({
     name: z.string().min(1, "Required"),
@@ -10,3 +10,5 @@ export const createTaskSchema = z.object({
     dueDate: z.coerce.date(),
     description: z.string().optional(),
 })
+
+export type CreateTaskSchema = z.infer<typeof createTaskSchema>

@@ -7,8 +7,9 @@ export const createProjectSchema = z.object({
         z.custom<File>((value) => {
             // 只在客户端验证 File 对象
             if (typeof window === "undefined") return true;
-            return value instanceof File;
-        }, "Must be a File"),
+            if (!(value instanceof File)) return false;
+            return value.size <= 1024 * 1024; 
+        }, "Must be a File under 1MB"),
         z.string().transform((value) => value === "" ? undefined: value)
     ]).optional(),
     workspaceId: z.string(),
@@ -21,8 +22,9 @@ export const updateProjectSchema = z.object({
         z.custom<File>((value) => {
             // 只在客户端验证 File 对象
             if (typeof window === "undefined") return true;
-            return value instanceof File;
-        }, "Must be a File"),
+            if (!(value instanceof File)) return false;
+            return value.size <= 1024 * 1024; 
+        }, "Must be a File under 1MB"),
         z.string().transform((value) => value === "" ? undefined: value)
     ]).optional(),
 })

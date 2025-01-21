@@ -18,27 +18,30 @@ export const UpdateTaskFormWrapper = ({
     const workspaceId = useWorkspaceId()
     const { data: initialValues, isLoading: isLoadingTask } = useGetTask({ taskId: id })
     
-
     const {
         data: projects,
         isLoading: isLoadingProjects,
     } = useGetProjects({ workspaceId })
     
+    
     const {
         data: members,
         isLoading: isLoadingMembers,
     } = useGetMembers({ workspaceId })
-
     
-    const projectOptions = projects?.documents.map((project) => ({
-        id: project.$id,
+    if (!initialValues) return null
+    if (!projects) return null
+    if (!members) return null
+
+    const projectOptions = projects.map((project) => ({
+        id: project.id,
         name: project.name,
-        imageUrl: project.imageUrl,
+        imageUrl: project.imageUrl ?? "",
     }))
 
-    const memberOptions = members?.documents.map((member) => ({
-        id: member.$id,    
-        name: member.name,
+    const memberOptions = members.map((member) => ({
+        id: member.id,    
+        name: member.name ?? member.email ?? "",
     }))
 
     const isLoading = isLoadingProjects || isLoadingMembers || isLoadingTask
@@ -53,11 +56,11 @@ export const UpdateTaskFormWrapper = ({
 
     if (!initialValues) return null
     return (
-        <UpdateTaskForm
-            onCancel={onCancel}
-            projectOptions={projectOptions ?? []}
-            memberOptions={memberOptions ?? []}
-            initialValues={initialValues.data}
-        />
-    )
+      <UpdateTaskForm
+        onCancel={onCancel}
+        projectOptions={projectOptions ?? []}
+        memberOptions={memberOptions ?? []}
+        initialValues={initialValues}
+      />
+    );
 }
